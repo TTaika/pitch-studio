@@ -1,16 +1,16 @@
 // Pitch Studio local server: serves the studio, renders slides, stores feedback,
-// pushes live-reload events and exports PDFs. No framework, no build step.
+// pushes live-reload events and exports PDFs and videos. No framework, no build step.
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { ROOT, DECKS, SLUG, readJSON, deckDir, loadDeck, slideFragment, sceneDuration } = require('./lib/deck');
 
-const ROOT = __dirname;
-const DECKS = path.join(ROOT, 'decks');
 const PROFILE = path.join(ROOT, 'profile');
 const STUDIO = path.join(ROOT, 'studio');
 const EXPORTS = path.join(ROOT, 'exports');
 const PORT = Number(process.env.PORT) || 4173;
+const GSAP = require.resolve('gsap/dist/gsap.min.js');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -20,18 +20,12 @@ const MIME = {
   '.ttf': 'font/ttf', '.pdf': 'application/pdf', '.mp4': 'video/mp4',
 };
 
-const SLUG = /^[a-z0-9][a-z0-9-_]*$/i;
-
 // ---------- helpers ----------
 
 function send(res, status, body, type = 'application/json; charset=utf-8') {
   const data = typeof body === 'string' || Buffer.isBuffer(body) ? body : JSON.stringify(body, null, 2);
   res.writeHead(status, { 'Content-Type': type, 'Cache-Control': 'no-store' });
   res.end(data);
-}
-
-function readJSON(file, fallback) {
-  try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; }
 }
 
 function writeJSON(file, value) {
@@ -62,49 +56,29 @@ function serveFile(res, file) {
   });
 }
 
-function deckDir(deck) {
-  if (!SLUG.test(deck)) return null;
-  const dir = path.join(DECKS, deck);
-  return fs.existsSync(path.join(dir, 'deck.json')) ? dir : null;
-}
-
-function loadDeck(deck) {
-  const dir = deckDir(deck);
-  if (!dir) return null;
-  const meta = readJSON(path.join(dir, 'deck.json'), null);
-  if (!meta) return null;
-  meta.id = deck;
-  meta.slides = (meta.slides || []).filter((id) => SLUG.test(id));
-  return meta;
-}
-
 function feedbackFile(deck) { return path.join(DECKS, deck, 'feedback.json'); }
 function loadFeedback(deck) { return readJSON(feedbackFile(deck), []); }
 
 // ---------- slide rendering ----------
 
-// A slide file is an HTML fragment: one <section class="slide"> on a 1920x1080 canvas.
-// The render page wraps it with the style profile and the deck's own overrides.
-// The server also injects the deck's position (stop number + route line) so slides
-// never hard-code their own number; the theme decides how, or whether, to show it.
-function routeNav(index, count) {
-  const stops = Array.from({ length: count }, (_, i) => `<li${i === index ? ' class="here"' : i < index ? ' class="past"' : ''}></li>`).join('');
-  return `<nav class="ps-route" aria-hidden="true"><span class="ps-stop">${String(index + 1).padStart(2, '0')}</span><ol>${stops}</ol></nav>`;
-}
-
-function renderPage(deck, meta, slideIds, { print = false } = {}) {
+// The render page wraps slide fragments with the style profile and the deck's own
+// overrides. With motion, a single slide also gets its scene timeline from
+// profile/motion.js, exposed as window.__ps so the studio can play and scrub it.
+function renderPage(deck, meta, slideIds, { print = false, motion = false } = {}) {
   const dir = path.join(DECKS, deck);
-  const parts = slideIds.map((id) => {
-    const file = path.join(dir, 'slides', `${id}.html`);
-    let html;
-    try { html = fs.readFileSync(file, 'utf8'); } catch {
-      html = `<section class="slide ps-missing"><p>Missing slide file: slides/${id}.html</p></section>`;
-    }
-    const at = html.lastIndexOf('</section>');
-    const index = meta.slides.indexOf(id);
-    if (at >= 0 && index >= 0) html = html.slice(0, at) + routeNav(index, meta.slides.length) + html.slice(at);
-    return `<!-- slide:${id} -->\n${html}`;
-  });
+  const parts = slideIds.map((id) => `<!-- slide:${id} -->\n${slideFragment(meta, id)}`);
+  const motionScript = motion && slideIds.length === 1 ? `
+<script src="/vendor/gsap.min.js"></script>
+<script src="/profile/motion.js"></script>
+<script>
+  (() => {
+    const duration = ${sceneDuration(meta, slideIds[0], parts[0])};
+    const tl = gsap.timeline({ paused: true });
+    const scene = PitchMotion.build(tl, document.querySelector('section.slide'), 0, duration, { exit: true });
+    window.__ps = { duration, rest: scene.rest, seek: (t) => tl.seek(Math.max(0, Math.min(duration, t)), false) };
+    window.__ps.seek(scene.rest);
+  })();
+</script>` : '';
   const deckCss = fs.existsSync(path.join(dir, 'deck.css')) ? `<link rel="stylesheet" href="/decks/${deck}/deck.css">` : '';
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -119,6 +93,7 @@ ${deckCss}
 </style>
 </head><body class="ps-render${print ? ' ps-print' : ''}">
 ${parts.join('\n')}
+${motionScript}
 </body></html>`;
 }
 
@@ -168,6 +143,28 @@ async function exportPdf(deck) {
   }
 }
 
+// ---------- video export ----------
+
+const videoJobs = new Map();
+function startVideo(deck) {
+  const job = { state: 'running', percent: 0 };
+  videoJobs.set(deck, job);
+  broadcast({ type: 'video', deck, ...job });
+  let last = -1;
+  require('./lib/video').renderVideo(deck, {
+    onProgress: ({ percent }) => {
+      if (percent === last) return;
+      last = job.percent = percent;
+      broadcast({ type: 'video', deck, ...job });
+    },
+  }).then((r) => {
+    broadcast({ type: 'video', deck, state: 'done', url: r.url, duration: r.duration });
+  }).catch((e) => {
+    console.error(e.message);
+    broadcast({ type: 'video', deck, state: 'error', message: e.message.split('\n')[0] });
+  }).finally(() => videoJobs.delete(deck));
+}
+
 // ---------- routes ----------
 
 async function handle(req, res) {
@@ -202,6 +199,7 @@ async function handle(req, res) {
     const f = safeJoin(DECKS, parts.slice(1).join('/'));
     return f ? serveFile(res, f) : send(res, 403, { error: 'forbidden' });
   }
+  if (url.pathname === '/vendor/gsap.min.js') return serveFile(res, GSAP);
 
   // /render/:deck/:slide  or  /render/:deck/all
   if (parts[0] === 'render' && parts.length === 3) {
@@ -209,7 +207,8 @@ async function handle(req, res) {
     if (!meta) return send(res, 404, { error: 'unknown deck' });
     const ids = parts[2] === 'all' ? meta.slides : [parts[2]].filter((id) => SLUG.test(id));
     if (!ids.length) return send(res, 404, { error: 'unknown slide' });
-    return send(res, 200, renderPage(parts[1], meta, ids, { print: url.searchParams.has('print') }), MIME['.html']);
+    const opts = { print: url.searchParams.has('print'), motion: url.searchParams.has('motion') };
+    return send(res, 200, renderPage(parts[1], meta, ids, opts), MIME['.html']);
   }
 
   if (parts[0] !== 'api') return send(res, 404, { error: 'not found' });
@@ -231,6 +230,14 @@ async function handle(req, res) {
     try { return send(res, 200, await exportPdf(deck)); } catch (e) { return send(res, 500, { error: e.message }); }
   }
 
+  // POST /api/decks/:deck/video → starts a render; progress arrives as SSE "video" events.
+  if (parts[3] === 'video' && method === 'POST') {
+    if (videoJobs.has(deck)) return send(res, 409, { error: 'A video render is already running for this deck.' });
+    startVideo(deck);
+    return send(res, 202, { state: 'running' });
+  }
+  if (parts[3] === 'video' && method === 'GET') return send(res, 200, videoJobs.get(deck) || { state: 'idle' });
+
   if (parts[3] !== 'feedback') return send(res, 404, { error: 'not found' });
   const items = loadFeedback(deck);
   const id = parts[4];
@@ -244,7 +251,7 @@ async function handle(req, res) {
       type: body.type,
       status: 'open',
       createdAt: new Date().toISOString(),
-      ...pick(body, ['slide', 'insertAfter', 'target', 'comment', 'to', 'blocks']),
+      ...pick(body, ['slide', 'insertAfter', 'target', 'comment', 'to', 'blocks', 'time']),
     };
     if (!['comment', 'adjust', 'layout'].includes(item.type)) return send(res, 400, { error: 'bad type' });
     items.push(item);

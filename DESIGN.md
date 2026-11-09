@@ -148,6 +148,9 @@ Server-injected `.ps-route`: a 6px line with 26px stops. Past stops are filled, 
 ### Direction board (signature)
 `[data-layout="board"]`: rows of destination (88px condensed), detail and a 120px arrow on a charcoal sign. Use it when one thing leads to several outcomes, at most once per deck.
 
+### Scene transport
+A bar under the canvas, exactly as wide as the slide: a play/pause icon button, a full-width scrubber and a mono time readout. The readout turns highlighter-coloured whenever the slide is off its settled frame, and comments made there carry an "at 0.7s" chip.
+
 ### Studio mode switch
 A segmented radio group (View / Comment / Adjust / Block) with key hints. The active mode is `#3a3d42` with an inset border, and its icon takes the highlighter colour (block blue in Block mode).
 

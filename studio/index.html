@@ -21,6 +21,9 @@
     <symbol id="i-reopen" viewBox="0 0 20 20"><path d="M4 10a6 6 0 1 0 1.8-4.3M4 3.5V7h3.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-plus" viewBox="0 0 20 20"><path d="M10 4v12M4 10h12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
     <symbol id="i-panel" viewBox="0 0 20 20"><rect x="2.5" y="3.5" width="15" height="13" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M12.5 3.5v13" stroke="currentColor" stroke-width="1.6"/></symbol>
+    <symbol id="i-play" viewBox="0 0 20 20"><path d="M6 4.5v11l9-5.5z" fill="currentColor"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 20 20"><rect x="5" y="4.5" width="3.5" height="11" rx="0.5" fill="currentColor"/><rect x="11.5" y="4.5" width="3.5" height="11" rx="0.5" fill="currentColor"/></symbol>
+    <symbol id="i-video" viewBox="0 0 20 20"><rect x="2.5" y="5" width="11" height="10" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="m13.5 9 4-2.5v7l-4-2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></symbol>
     <symbol id="i-close" viewBox="0 0 20 20"><path d="m5 5 10 10M15 5 5 15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></symbol>
   </defs>
 </svg>
@@ -45,6 +48,7 @@
     </span>
     <button class="btn" id="togglePanel" aria-pressed="true" title="Show or hide the feedback panel (F)"><svg><use href="#i-panel"/></svg><span>Feedback</span><b class="count" id="panelCount" hidden></b></button>
     <button class="btn" id="copyPrompt" title="Copy an instruction for Claude Code"><svg><use href="#i-copy"/></svg><span>Copy prompt for Claude</span></button>
+    <button class="btn" id="exportVideo" title="Render the deck to MP4 with its motion"><svg><use href="#i-video"/></svg><span>Export video</span></button>
     <button class="btn btn-primary" id="exportPdf"><svg><use href="#i-export"/></svg><span>Export PDF</span></button>
   </div>
 </header>
@@ -59,6 +63,11 @@
     <iframe id="slideFrame" title="Slide preview" tabindex="-1"></iframe>
     <div class="sketch-ground" id="sketchGround" hidden></div>
     <div class="overlay" id="overlay"></div>
+  </div>
+  <div class="transport" id="transport">
+    <button class="icon-btn play" id="playBtn" title="Play this slide's motion (Space)" aria-label="Play"><svg><use href="#i-play"/></svg></button>
+    <input type="range" id="scrub" min="0" max="1" step="0.01" value="1" aria-label="Scene time">
+    <span class="time" id="timeLabel">0.0 / 0.0 s</span>
   </div>
 </main>
 

@@ -30,9 +30,12 @@ The owner's taste, written down. Read this before writing any slide. Visual toke
 - Headlines in Barlow Condensed, body in Barlow. Body text at least 30px on the 1920 canvas.
 - Every number carries its unit and sits in a `table.ruled`. No floating big-number stickers.
 
-## Motion (for video, milestone 2)
+## Motion
 
-- Fixed build order on every slide: ground → panel → headline → content → focus (orange) last.
+Implemented in `motion.js`; these are the rules it encodes.
+- Fixed build order on every slide: sign panel drops in → stop roundel snaps on → headline slides in from the left → content rises piece by piece → orange focus lands last with a small overshoot.
+- Each slide leaves like a train pulling out: a short push to the left over platform grey. No fades to black, no spins, no zooms.
+- Scenes are as long as reading takes (about 4 words a second), 4–8 seconds.
 
 ## Bans
 

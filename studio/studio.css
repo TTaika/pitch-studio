@@ -98,6 +98,7 @@ body[data-mode="block"] .modes button[aria-checked="true"] svg { color: var(--bl
 }
 .btn:hover { background: var(--raise-2); border-color: var(--line-2); }
 .btn:disabled { opacity: 0.55; cursor: progress; }
+.btn.busy { cursor: progress; color: var(--accent); border-color: var(--line-2); }
 .btn-primary { background: var(--text); color: var(--ground); border-color: var(--text); font-weight: 600; }
 .btn-primary:hover { background: #fff; border-color: #fff; }
 .btn-ghost { background: none; border-color: transparent; color: var(--text-2); }
@@ -164,10 +165,33 @@ body.panel-off .panel { display: none; }
 .stage {
   grid-area: stage;
   position: relative;
-  display: grid; place-items: center;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
   min-width: 0; min-height: 0;
   overflow: hidden;
 }
+
+/* scene transport: play and scrub the slide's motion */
+.transport {
+  display: flex; align-items: center; gap: 12px;
+  height: 36px; padding: 0 12px 0 4px;
+  background: var(--shell); border: 1px solid var(--line); border-radius: 8px;
+}
+.transport .play { width: 28px; height: 28px; color: var(--text); }
+.transport .play svg { width: 16px; height: 16px; }
+.transport input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  flex: 1; min-width: 0;
+  height: 4px; border-radius: 2px; background: var(--line-2); cursor: pointer;
+  accent-color: var(--accent);
+}
+.transport input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+  background: var(--text); border: 0;
+}
+.transport input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.transport .time { font: 12px var(--mono); color: var(--text-2); min-width: 88px; text-align: right; }
+.transport.moving .time { color: var(--accent); }
+.transport[hidden] { display: none; }
 .canvas {
   position: relative;
   background: #fff;
@@ -346,6 +370,11 @@ body[data-mode="block"] .blocks-layer { display: block; }
 .fb-slide { font-size: 12px; color: var(--text-3); white-space: nowrap; }
 .fb-item textarea { min-height: 40px; font-size: 13.5px; }
 .fb-meta { margin: 8px 0 0; font: 12px/1.5 var(--mono); color: var(--text-2); }
+.fb-time {
+  font: 600 11px/1 var(--mono); color: var(--accent);
+  border: 1px solid var(--line-2); border-radius: 3px; padding: 3px 5px; white-space: nowrap;
+}
+.pop-head .fb-time { flex: none; }
 .fb-resolution {
   margin: 8px 0 0; padding: 8px 10px;
   background: var(--ground); border-radius: 5px;
@@ -383,6 +412,8 @@ body[data-mode="block"] .blocks-layer { display: block; }
 @media (max-width: 1440px) {
   body { grid-template-columns: 172px 1fr 288px; }
   body.panel-off { grid-template-columns: 172px 1fr 0; }
+  /* Make room in the top bar: the two hand-off actions keep their words. */
+  .modes kbd, #togglePanel > span, #exportVideo:not(.busy) > span { display: none; }
   .thumb .frame { width: 118px; height: 66.4px; }
   .thumb .frame iframe { transform: scale(0.06146); }
 }

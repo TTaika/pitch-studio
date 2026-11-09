@@ -26,8 +26,8 @@
   const stage = $('#stage');
 
   const HINTS = {
-    view: 'Viewing. Press C to comment, A to move & resize, B to sketch layout blocks. ← → change slides, F toggles feedback.',
-    comment: 'Click any element to comment on it. In the popover, ↑ selects the parent element.',
+    view: 'Viewing. Space plays the slide\'s motion. C comments, A moves & resizes, B sketches blocks. ← → change slides, F toggles feedback.',
+    comment: 'Click any element to comment on it. Scrub the motion first to comment on a moment. ↑ in the popover selects the parent.',
     adjust: 'Drag an element to move it, drag a handle to resize. Arrow keys nudge (Shift = 10px). Delete reverts.',
     block: 'Drag on the slide to draw a block, then name it ("logo", "big number"). Claude builds the slide to match.',
   };
@@ -177,6 +177,8 @@
     const sketch = isSketch();
     $('#sketchGround').hidden = !sketch;
     frame.hidden = sketch;
+    $('#transport').hidden = sketch;
+    stopPlay();
     if (sketch) { if (state.mode !== 'block') setMode('block'); drawOverlay(); renderPanel(); return; }
     if (id) reloadFrame();
     renderPanel();
@@ -184,13 +186,72 @@
 
   function reloadFrame() {
     if (!state.current || isSketch()) return;
-    frame.src = `/render/${state.deck.id}/${state.current}?t=${Date.now()}`;
+    frame.src = `/render/${state.deck.id}/${state.current}?motion=1&t=${Date.now()}`;
   }
   frame.addEventListener('load', () => {
+    const ps = frame.contentWindow?.__ps;
+    state.motion = ps ? { ps, duration: ps.duration, rest: ps.rest, t: ps.rest } : null;
+    const scrub = $('#scrub');
+    scrub.max = String(ps?.duration || 1);
+    if (state.pendingSeek != null && ps) seek(state.pendingSeek); else updateTransport();
+    state.pendingSeek = null;
     applyAdjustPreviews();
     drawOverlay();
     // Fonts and images can shift layout after load; redraw once they settle.
     doc()?.fonts?.ready.then(drawOverlay);
+  });
+
+  // ---------- motion: play and scrub the slide's scene ----------
+  // The render page runs the same profile/motion.js timeline the video uses, so what
+  // plays here is what the MP4 shows. "Rest" is the settled frame you edit on.
+  const atRest = () => !state.motion || Math.abs(state.motion.t - state.motion.rest) < 0.01;
+  function seek(t) {
+    const m = state.motion;
+    if (!m) return;
+    m.t = Math.max(0, Math.min(m.duration, t));
+    m.ps.seek(m.t);
+    updateTransport();
+    drawOverlay();
+  }
+  function updateTransport() {
+    const m = state.motion;
+    $('#scrub').value = String(m ? m.t : 1);
+    $('#timeLabel').textContent = m ? `${m.t.toFixed(1)} / ${m.duration.toFixed(1)} s` : '–';
+    $('#transport').classList.toggle('moving', !atRest());
+    const playing = !!state.playing;
+    $('#playBtn use').setAttribute('href', playing ? '#i-pause' : '#i-play');
+    $('#playBtn').setAttribute('aria-label', playing ? 'Pause' : 'Play');
+  }
+  function play() {
+    const m = state.motion;
+    if (!m) return;
+    if (state.mode === 'adjust' || state.mode === 'block') setMode('view');
+    closePopover();
+    if (m.t >= m.duration - 0.01 || atRest()) m.t = 0;
+    let last = performance.now();
+    state.playing = true;
+    const step = (now) => {
+      if (!state.playing) return;
+      const t = m.t + (now - last) / 1000;
+      last = now;
+      if (t >= m.duration) { stopPlay(); seek(m.rest); return; }
+      seek(t);
+      state.raf = requestAnimationFrame(step);
+    };
+    state.raf = requestAnimationFrame(step);
+    updateTransport();
+  }
+  function stopPlay() {
+    state.playing = false;
+    cancelAnimationFrame(state.raf);
+    if (state.motion) updateTransport();
+  }
+  $('#playBtn').addEventListener('click', () => (state.playing ? stopPlay() : play()));
+  $('#scrub').addEventListener('input', (e) => {
+    const t = Number(e.target.value); // read first: stopPlay() writes the old time back
+    stopPlay();
+    if (state.mode === 'adjust' || state.mode === 'block') setMode('view');
+    seek(t);
   });
 
   // Open move/resize instructions are previewed on the slide until Claude applies them.
@@ -213,11 +274,12 @@
 
   // ---------- fit ----------
   function fit() {
-    const pad = 40;
+    const pad = 40, transportH = isSketch() ? 0 : 50;
     const r = stage.getBoundingClientRect();
-    state.scale = Math.max(0.1, Math.min((r.width - pad * 2) / W, (r.height - pad * 2) / H));
+    state.scale = Math.max(0.1, Math.min((r.width - pad * 2) / W, (r.height - pad * 2 - transportH) / H));
     canvas.style.width = W * state.scale + 'px';
     canvas.style.height = H * state.scale + 'px';
+    $('#transport').style.width = W * state.scale + 'px';
     frame.style.transform = `scale(${state.scale})`;
     drawOverlay();
   }
@@ -228,6 +290,8 @@
     if (isSketch() && mode !== 'block') return toast('A sketched slide only has Block mode until Claude builds it.');
     state.mode = mode;
     document.body.dataset.mode = mode;
+    // Moving and sketching only make sense on the settled frame.
+    if ((mode === 'adjust' || mode === 'block') && !atRest()) { stopPlay(); seek(state.motion.rest); }
     $$('.modes button').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.mode === mode)));
     state.hover = null; state.selected = null; state.selBlock = null;
     closePopover();
@@ -336,6 +400,7 @@
     const p = toCanvas(e);
     if (state.mode === 'comment') {
       if (state.popover) return closePopover();
+      stopPlay();
       const el = hitTest(p) || slideRoot();
       if (el) openPopover(el);
     } else if (state.mode === 'adjust') {
@@ -352,11 +417,13 @@
   // ---------- comment popover ----------
   function openPopover(el) {
     const target = targetOf(el);
+    // Off the settled frame, the comment is about motion at this moment.
+    const time = atRest() ? null : Math.round(state.motion.t * 100) / 100;
     const node = document.createElement('div');
     node.className = 'pop';
     node.innerHTML = `
       <div class="pop-head">
-        <code></code>
+        <code></code>${time != null ? `<span class="fb-time" title="Comment is about this moment in the motion">at ${time.toFixed(1)}s</span>` : ''}
         <button class="icon-btn" data-act="parent" title="Select parent element"><svg><use href="#i-parent"/></svg></button>
         <button class="icon-btn" data-act="close" title="Cancel (Esc)"><svg><use href="#i-close"/></svg></button>
       </div>
@@ -380,7 +447,7 @@
       if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) submitComment();
       if (e.key === 'Escape') closePopover();
     });
-    state.popover = { node, target, label: labelFor(el) };
+    state.popover = { node, target, time, label: labelFor(el) };
     // Anchor below the target, flipped above or inward when it would leave the canvas.
     const s = state.scale, r = target.rect;
     const pw = 320, ph = 190;
@@ -402,7 +469,9 @@
     const comment = $('textarea', pop.node).value.trim();
     if (!comment) return $('textarea', pop.node).focus();
     try {
-      const item = await saveItem('POST', '', { type: 'comment', slide: state.current, target: pop.target, comment });
+      const body = { type: 'comment', slide: state.current, target: pop.target, comment };
+      if (pop.time != null) body.time = pop.time;
+      const item = await saveItem('POST', '', body);
       state.popover = null;
       state.activeItem = item.id;
       afterFeedbackChange();
@@ -647,7 +716,7 @@
       const where = f.slide ? `Slide ${slideNumber(f.slide) ?? '?'}` : 'New slide';
       const target = f.type === 'layout' ? `${f.blocks?.length || 0} block${f.blocks?.length === 1 ? '' : 's'}` : (f.target?.el || f.target?.selector || '');
       li.innerHTML = `
-        <div class="fb-top"><span class="fb-num"></span><span class="fb-kind"></span><span class="fb-target"></span>${state.scope === 'all' ? '<span class="fb-slide"></span>' : ''}</div>
+        <div class="fb-top"><span class="fb-num"></span><span class="fb-kind"></span><span class="fb-target"></span>${f.time != null ? `<span class="fb-time">at ${Number(f.time).toFixed(1)}s</span>` : ''}${state.scope === 'all' ? '<span class="fb-slide"></span>' : ''}</div>
         <textarea rows="2"></textarea>
         ${f.type === 'adjust' && f.to ? `<p class="fb-meta">${fmtRect(f.target.rect)} → ${fmtRect(f.to)}</p>` : ''}
         ${f.type === 'layout' && f.blocks?.length ? `<p class="fb-meta">${f.blocks.map((b) => esc(b.label || 'unnamed')).join(' · ')}</p>` : ''}
@@ -672,7 +741,14 @@
         if (act === 'reopen') return saveItem('PATCH', f.id, { status: 'open' }).then(afterFeedbackChange);
         if (e.target === ta) return;
         const slide = f.slide || 'sketch:' + f.id;
-        if (slide !== state.current) showSlide(slide);
+        // A timed comment jumps the scrubber to the moment it was made.
+        if (slide !== state.current) {
+          state.pendingSeek = f.time ?? null;
+          showSlide(slide);
+        } else if (f.time != null) {
+          stopPlay();
+          seek(f.time);
+        }
         focusItem(f.id, false);
       });
       return li;
@@ -730,7 +806,9 @@
 
   // ---------- keyboard ----------
   document.addEventListener('keydown', (e) => {
-    const typing = e.target.matches('input, textarea');
+    // The scrubber keeps its arrow keys; every other shortcut still works while it has focus.
+    if (e.target.matches('input[type="range"]') && e.key.startsWith('Arrow')) return;
+    const typing = e.target.matches('input:not([type="range"]), textarea');
     if (e.key === 'Escape') {
       if (typing) e.target.blur();
       closePopover();
@@ -742,6 +820,10 @@
     const modeKey = { v: 'view', c: 'comment', a: 'adjust', b: 'block' }[k];
     if (modeKey) return setMode(modeKey);
     if (k === 'f') return setPanel(document.body.classList.contains('panel-off'));
+    if (e.key === ' ' && !e.target.matches('button')) {
+      e.preventDefault();
+      return state.playing ? stopPlay() : play();
+    }
 
     if (state.mode === 'adjust' && state.selected && e.key.startsWith('Arrow')) {
       e.preventDefault();
@@ -791,6 +873,30 @@
     catch { toast(text); }
   });
 
+  // Video renders take a minute or two; progress arrives over the live-reload stream.
+  $('#exportVideo').addEventListener('click', async () => {
+    try {
+      await api('POST', `/api/decks/${state.deck.id}/video`);
+      toast('Rendering video. Keep working; it lands in exports/ when done.');
+    } catch (err) { toast(`Video not started: ${err.message}`, true); }
+  });
+  function onVideo(ev) {
+    if (!state.deck || ev.deck !== state.deck.id) return;
+    const btn = $('#exportVideo');
+    const label = $('span', btn);
+    if (ev.state === 'running') {
+      btn.classList.add('busy');
+      btn.disabled = true;
+      label.textContent = `Rendering ${ev.percent || 0}%`;
+      return;
+    }
+    btn.classList.remove('busy');
+    btn.disabled = false;
+    label.textContent = 'Export video';
+    if (ev.state === 'done') toast(`Video ready, ${Math.round(ev.duration)}s.`, false, { href: ev.url, text: 'Open video' });
+    if (ev.state === 'error') toast(`Video failed: ${ev.message}`, true);
+  }
+
   $('#exportPdf').addEventListener('click', async () => {
     const btn = $('#exportPdf');
     btn.disabled = true;
@@ -830,6 +936,7 @@
     es.onmessage = (m) => {
       const ev = JSON.parse(m.data);
       if (ev.type === 'change') onChange(ev).catch((e) => console.error(e));
+      if (ev.type === 'video') onVideo(ev);
     };
   }
 
@@ -877,6 +984,8 @@
       await loadDeck(deck.id);
       fit();
       connect();
+      const job = await api('GET', `/api/decks/${deck.id}/video`).catch(() => null);
+      if (job?.state === 'running') onVideo({ ...job, deck: deck.id });
     } catch (err) {
       toast(`Could not load the deck: ${err.message}`, true);
     }

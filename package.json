@@ -6,10 +6,17 @@
   "scripts": {
     "start": "node server.js",
     "pdf": "node scripts/cli.js pdf",
-    "shot": "node scripts/cli.js shot"
+    "shot": "node scripts/cli.js shot",
+    "video": "node scripts/cli.js video",
+    "video-preview": "node scripts/cli.js video-preview",
+    "frames": "node scripts/cli.js frames"
   },
   "type": "commonjs",
   "dependencies": {
+    "@ffprobe-installer/ffprobe": "^2.1.2",
+    "ffmpeg-static": "^5.3.0",
+    "gsap": "^3.15.1",
+    "hyperframes": "^0.9.26",
     "playwright-core": "^1.56.1"
   },
   "private": true

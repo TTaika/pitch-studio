@@ -8,6 +8,7 @@
 @font-face { font-family: "Barlow"; font-weight: 600; src: url("/profile/fonts/barlow-latin-600-normal.woff2") format("woff2"); }
 @font-face { font-family: "Barlow Condensed"; font-weight: 600; src: url("/profile/fonts/barlow-condensed-latin-600-normal.woff2") format("woff2"); }
 @font-face { font-family: "Barlow Condensed"; font-weight: 700; src: url("/profile/fonts/barlow-condensed-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "JetBrains Mono"; font-weight: 600; src: url("/profile/fonts/jetbrains-mono-latin-600-normal.woff2") format("woff2"); }
 @font-face { font-family: "Barlow Condensed"; font-weight: 800; src: url("/profile/fonts/barlow-condensed-latin-800-normal.woff2") format("woff2"); }
 
 :root {
@@ -20,7 +21,8 @@
   --ink-2: #4a5056;       /* secondary text on platform (6.4:1) */
   --on-sign-2: #b4b9be;   /* secondary text on sign (8:1) */
 
-  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --display: "Barlow Condensed", sans-serif;
+  --code: "JetBrains Mono", monospace;
   --text: "Barlow", Arial, sans-serif;
 
   --m: 96px;              /* outer margin */
@@ -228,7 +230,7 @@
   position: absolute; left: var(--m); top: 700px;
   display: inline-flex; align-items: center; gap: 28px;
   padding: 22px 36px; background: var(--platform); color: var(--sign);
-  font: 600 44px/1 "Cascadia Mono", Consolas, monospace;
+  font: 600 44px/1 var(--code);
 }
 [data-layout="close"] .cmd small { font: 500 30px/1 var(--text); color: var(--ink-2); }
 
