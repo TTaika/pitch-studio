@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-09T21:00:00Z",
+  "title": "Design System: Pitch Studio",
+  "extensions": {
+    "colorMeta": {
+      "signal": { "role": "primary", "displayName": "Signal Orange", "canonical": "#ff6319", "tonalRamp": ["#4a1a05", "#7a2c0a", "#b03f10", "#e05414", "#ff6319", "#ff8a52", "#ffb48f", "#ffdccb"] },
+      "sign": { "role": "neutral", "displayName": "Enamel Sign", "canonical": "#1e2124", "tonalRamp": ["#0d0e10", "#1e2124", "#2b2f33", "#3d4247", "#5b6167", "#7c8288", "#b4b9be", "#e4e7e9"] },
+      "platform": { "role": "neutral", "displayName": "Platform Grey", "canonical": "#e4e7e9", "tonalRamp": ["#4a5056", "#6b7177", "#8f959a", "#b0b5b9", "#cfd3d6", "#e4e7e9", "#eff1f2", "#f8f9f9"] },
+      "studio-accent": { "role": "secondary", "displayName": "Highlighter", "canonical": "#d4ff3f", "tonalRamp": ["#2a3300", "#4a5a00", "#6f8700", "#97b800", "#bce51a", "#d4ff3f", "#e4ff85", "#f3ffc9"] },
+      "studio-block": { "role": "tertiary", "displayName": "Sketch Blue", "canonical": "#7fd3ff", "tonalRamp": ["#00202e", "#003a54", "#00577d", "#0078ab", "#33a8e0", "#7fd3ff", "#b3e5ff", "#e0f4ff"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Sign Display", "purpose": "Title and close slides only." },
+      "headline": { "displayName": "Band Headline", "purpose": "Headline inside a content slide's sign band." },
+      "station": { "displayName": "Station Name", "purpose": "Station, platform, stop and board destination names; sentence case." },
+      "body": { "displayName": "Body", "purpose": "Slide copy, minimum 30px on the 1920 canvas." },
+      "studio-ui": { "displayName": "Studio UI", "purpose": "All studio chrome." }
+    },
+    "shadows": [
+      { "name": "studio-canvas", "value": "0 1px 2px rgba(0,0,0,0.4), 0 18px 48px rgba(0,0,0,0.45)", "purpose": "Lifts the slide canvas off the studio ground." },
+      { "name": "studio-popover", "value": "0 12px 32px rgba(0,0,0,0.5)", "purpose": "Comment popover." }
+    ],
+    "motion": [
+      { "name": "ease-out-expo", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "Studio toasts and pin hover." },
+      { "name": "build-order", "value": "ground → panel → headline → content → focus", "purpose": "Slide element entry order for video (milestone 2)." }
+    ],
+    "breakpoints": [
+      { "name": "studio-compact", "value": "1440px" },
+      { "name": "studio-icons-only", "value": "1100px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Sign Band",
+      "kind": "custom",
+      "refersTo": "sign-band",
+      "description": "Charcoal sign panel with the stop roundel and the slide headline.",
+      "html": "<div class=\"ds-band\"><span class=\"ds-stop\">04</span><h2 class=\"ds-band-h\">Direct it by pointing</h2></div>",
+      "css": ".ds-band { display: flex; align-items: center; gap: 24px; background: #1e2124; color: #fff; padding: 28px 32px; } .ds-stop { width: 56px; height: 56px; border-radius: 50%; background: #ff6319; color: #1e2124; font: 800 30px/56px 'Barlow Condensed', 'Arial Narrow', sans-serif; text-align: center; flex: none; } .ds-band-h { margin: 0; font: 700 48px/0.95 'Barlow Condensed', 'Arial Narrow', sans-serif; letter-spacing: -0.01em; }"
+    },
+    {
+      "name": "Route Line",
+      "kind": "nav",
+      "refersTo": "route",
+      "description": "Deck progress as stops; past filled, current orange.",
+      "html": "<ol class=\"ds-route\"><li class=\"past\"></li><li class=\"past\"></li><li class=\"here\"></li><li></li><li></li></ol>",
+      "css": ".ds-route { position: relative; display: flex; justify-content: space-between; align-items: center; list-style: none; padding: 0; margin: 0; width: 320px; height: 20px; } .ds-route::before { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 3px; margin-top: -1.5px; background: #1e2124; } .ds-route li { position: relative; width: 13px; height: 13px; border-radius: 50%; background: #e4e7e9; border: 3px solid #1e2124; box-sizing: border-box; } .ds-route li.past { background: #1e2124; } .ds-route li.here { width: 18px; height: 18px; background: #ff6319; border-color: #ff6319; }"
+    },
+    {
+      "name": "Direction Board Row",
+      "kind": "custom",
+      "refersTo": "board",
+      "description": "Signature: destination, detail and arrow on a charcoal sign.",
+      "html": "<div class=\"ds-board\"><span class=\"ds-dest\">PDF</span><span class=\"ds-detail\">One click, every slide</span><svg class=\"ds-arrow\" viewBox=\"0 0 100 100\"><path d=\"M6 41h58L42 19h26l28 31-28 31H42l22-22H6z\"/></svg></div>",
+      "css": ".ds-board { display: grid; grid-template-columns: 120px 1fr 48px; align-items: center; gap: 20px; background: #1e2124; color: #fff; padding: 18px 24px; } .ds-dest { font: 700 40px/1 'Barlow Condensed', 'Arial Narrow', sans-serif; } .ds-detail { font: 500 16px/1.3 Barlow, Arial, sans-serif; color: #b4b9be; } .ds-arrow { width: 48px; height: 48px; fill: currentColor; rotate: -90deg; }"
+    },
+    {
+      "name": "Studio Primary Button",
+      "kind": "button",
+      "refersTo": "studio-button-primary",
+      "description": "The one primary action in the studio top bar (Export PDF).",
+      "html": "<button class=\"ds-btn-primary\">Export PDF</button>",
+      "css": ".ds-btn-primary { height: 34px; padding: 0 12px; background: #ecedee; color: #141516; border: 1px solid #ecedee; border-radius: 6px; font: 600 14px/1 'Segoe UI', system-ui, sans-serif; cursor: pointer; transition: background 0.15s; } .ds-btn-primary:hover { background: #fff; } .ds-btn-primary:focus-visible { outline: 2px solid #d4ff3f; outline-offset: 2px; }"
+    },
+    {
+      "name": "Studio Button",
+      "kind": "button",
+      "refersTo": "studio-button",
+      "description": "Secondary studio actions (Copy prompt for Claude).",
+      "html": "<button class=\"ds-btn\">Copy prompt for Claude</button>",
+      "css": ".ds-btn { height: 34px; padding: 0 12px; background: #25262a; color: #ecedee; border: 1px solid #34363b; border-radius: 6px; font: 400 14px/1 'Segoe UI', system-ui, sans-serif; cursor: pointer; transition: background 0.15s, border-color 0.15s; } .ds-btn:hover { background: #2d2f33; border-color: #45484e; } .ds-btn:focus-visible { outline: 2px solid #d4ff3f; outline-offset: 2px; }"
+    },
+    {
+      "name": "Comment Pin",
+      "kind": "chip",
+      "refersTo": "pin",
+      "description": "Numbered feedback marker on the slide canvas.",
+      "html": "<button class=\"ds-pin\">1</button>",
+      "css": ".ds-pin { width: 24px; height: 24px; border: 0; border-radius: 12px 12px 12px 3px; background: #d4ff3f; color: #182000; font: 700 12px/24px 'Segoe UI', system-ui, sans-serif; text-align: center; box-shadow: 0 2px 6px rgba(0,0,0,0.35); cursor: pointer; transition: transform 0.15s cubic-bezier(0.16,1,0.3,1); } .ds-pin:hover { transform: scale(1.18); } .ds-pin:focus-visible { outline: 2px solid #ecedee; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Every slide is a station sign.",
+    "overview": "The deck style is Platform Signage: charcoal enamel sign panels mounted on cool platform grey, condensed sign lettering, heavy arrows and a route line that tells the viewer where they are. The studio is a quiet dark tool whose one highlighter accent marks only what the owner is pointing at.",
+    "keyCharacteristics": ["One statement per slide, left-aligned", "Orange means you are here", "Position injected by the server", "Studio stays quiet so the slide leads"],
+    "rules": [
+      { "name": "The You-Are-Here Rule", "body": "Orange only on the roundel, the route-line stop and at most one focus element.", "section": "colors" },
+      { "name": "The No-Eyebrow Rule", "body": "No small tracked uppercase labels above headings; station names are set big in sentence case.", "section": "typography" }
+    ],
+    "dos": ["Do write headlines as claims", "Do name every meaningful element with data-el", "Do put numbers in ruled tables with units"],
+    "donts": ["Don't use orange as decoration", "Don't centre text or use gradients and glass", "Don't hard-code slide numbers or pixel positions"]
+  }
+}

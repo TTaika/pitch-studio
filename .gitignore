@@ -2,3 +2,5 @@ node_modules/
 exports/
 .impeccable/review/
 .claude/worktrees/
+.playwright-mcp/
+decks/*/feedback.json

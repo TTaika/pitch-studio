@@ -1,0 +1,240 @@
+/* Style profile: Platform Signage.
+   Every slide is a station sign. Charcoal enamel panels over platform grey,
+   condensed sign lettering, heavy arrows, a route line with stops.
+   Orange means "you are here": the current stop and the ONE focus element per slide. */
+
+@font-face { font-family: "Barlow"; font-weight: 400; src: url("/profile/fonts/barlow-latin-400-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow"; font-weight: 500; src: url("/profile/fonts/barlow-latin-500-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow"; font-weight: 600; src: url("/profile/fonts/barlow-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 600; src: url("/profile/fonts/barlow-condensed-latin-600-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 700; src: url("/profile/fonts/barlow-condensed-latin-700-normal.woff2") format("woff2"); }
+@font-face { font-family: "Barlow Condensed"; font-weight: 800; src: url("/profile/fonts/barlow-condensed-latin-800-normal.woff2") format("woff2"); }
+
+:root {
+  --sign: #1e2124;        /* enamel panel, primary ink on platform */
+  --sign-2: #2b2f33;      /* rules and raised rows on a sign */
+  --platform: #e4e7e9;    /* ground */
+  --platform-2: #cfd3d6;  /* rules on the ground */
+  --white: #ffffff;
+  --signal: #ff6319;      /* you are here. Nothing else. */
+  --ink-2: #4a5056;       /* secondary text on platform (6.4:1) */
+  --on-sign-2: #b4b9be;   /* secondary text on sign (8:1) */
+
+  --display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --text: "Barlow", Arial, sans-serif;
+
+  --m: 96px;              /* outer margin */
+  --band: 300px;          /* header sign band on content slides */
+}
+
+/* ---------- canvas ---------- */
+.slide {
+  position: relative;
+  width: 1920px;
+  height: 1080px;
+  overflow: hidden;
+  background: var(--platform);
+  color: var(--sign);
+  font: 500 34px/1.35 var(--text);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+.slide * { box-sizing: border-box; margin: 0; }
+.slide h1, .slide h2, .slide h3 {
+  font-family: var(--display);
+  font-weight: 700;
+  line-height: 0.95;
+  letter-spacing: -0.01em;
+  text-wrap: balance;
+}
+.slide em { font-style: normal; }
+.slide .focus, .slide em.focus { color: var(--signal); }
+.slide p { text-wrap: pretty; }
+
+/* the sign panel */
+.panel { background: var(--sign); color: var(--white); }
+
+/* ---------- arrow (authored transit arrow, points right by default) ---------- */
+.arrow { display: block; fill: currentColor; }
+.arrow.up { rotate: -90deg; }
+.arrow.down { rotate: 90deg; }
+.arrow.left { rotate: 180deg; }
+.arrow.up-right { rotate: -45deg; }
+
+/* ---------- injected position: stop roundel + route line ---------- */
+.ps-route { display: contents; }
+.ps-stop {
+  position: absolute; left: var(--m); top: 84px; z-index: 2;
+  width: 112px; height: 112px; border-radius: 50%;
+  background: var(--signal); color: var(--sign);
+  font: 800 60px/112px var(--display); text-align: center;
+}
+.ps-route ol {
+  position: absolute; left: var(--m); right: var(--m); bottom: 64px;
+  display: flex; justify-content: space-between; align-items: center;
+  height: 36px; padding: 0; list-style: none;
+}
+.ps-route ol::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 50%; height: 6px; margin-top: -3px;
+  background: var(--sign);
+}
+.ps-route li {
+  position: relative; width: 26px; height: 26px; border-radius: 50%;
+  background: var(--platform); border: 6px solid var(--sign);
+}
+.ps-route li.past { background: var(--sign); }
+.ps-route li.here { width: 36px; height: 36px; background: var(--signal); border-color: var(--signal); }
+.slide[data-route="off"] .ps-route { display: none; }
+
+/* on full-sign slides the route is drawn in light ink */
+.slide.on-sign { background: var(--sign); color: var(--white); }
+.slide.on-sign .ps-route ol::before { background: #3d4247; }
+.slide.on-sign .ps-route li { background: var(--sign); border-color: #5b6167; }
+.slide.on-sign .ps-route li.past { background: #5b6167; }
+.slide.on-sign .ps-route li.here { background: var(--signal); border-color: var(--signal); }
+
+/* ---------- content slides: header sign band + platform body ---------- */
+/* A mounted sign: inset from the slide edge so platform grey shows around it. */
+.band {
+  position: absolute; left: 48px; right: 48px; top: 48px; height: calc(var(--band) - 48px);
+  display: flex; align-items: center;
+  padding: 0 48px 0 calc(var(--m) - 48px + 112px + 48px);
+}
+.band h2 { font-size: 96px; max-width: 1500px; }
+.slide:has(.band) .ps-stop { top: calc(48px + (var(--band) - 48px - 112px) / 2); }
+
+.body {
+  position: absolute; left: var(--m); right: var(--m);
+  top: calc(var(--band) + 80px); bottom: 180px;
+}
+
+/* ---------- layout: title ---------- */
+[data-layout="title"] .panel {
+  position: absolute; left: 0; right: 0; top: 0; height: 640px;
+}
+[data-layout="title"] h1 {
+  position: absolute; left: var(--m); top: 250px; width: 1280px;
+  font-size: 156px; font-weight: 800; line-height: 0.9;
+}
+[data-layout="title"] .go {
+  position: absolute; right: var(--m); top: 200px; width: 320px; height: 320px;
+  color: var(--signal);
+}
+[data-layout="title"] .sub {
+  position: absolute; left: var(--m); top: 712px; width: 1240px;
+  font-size: 46px; font-weight: 500; line-height: 1.25;
+}
+
+/* ---------- layout: statement (whole slide is the sign) ---------- */
+[data-layout="statement"] .statement {
+  position: absolute; left: var(--m); top: 292px; width: 1560px;
+  font: 700 128px/0.98 var(--display); letter-spacing: -0.01em; text-wrap: balance;
+}
+[data-layout="statement"] .note {
+  position: absolute; left: var(--m); top: 760px; width: 1100px;
+  font-size: 38px; color: var(--on-sign-2);
+}
+
+/* ---------- layout: split (two platforms, two directions) ---------- */
+[data-layout="split"] .body { display: grid; grid-template-columns: 1fr 1fr; column-gap: 96px; }
+.platform { border-top: 6px solid var(--sign); padding-top: 36px; }
+.platform h3 {
+  display: flex; align-items: center; gap: 24px;
+  font-size: 64px; margin-bottom: 32px;
+}
+.platform h3 .arrow { width: 64px; height: 64px; flex: none; }
+.platform ul { list-style: none; padding: 0; display: grid; gap: 18px; }
+.platform li { font-size: 36px; line-height: 1.3; padding-left: 36px; position: relative; }
+.platform li::before {
+  content: ""; position: absolute; left: 0; top: 0.5em; width: 14px; height: 14px; margin-top: -4px;
+  background: var(--sign);
+}
+.platform .verdict { margin-top: 36px; font: 700 44px/1.1 var(--display); }
+
+/* ---------- layout: steps (stations along a line) ---------- */
+[data-layout="steps"] .line {
+  position: absolute; left: 0; right: 0; top: 120px; height: 10px; background: var(--sign);
+}
+[data-layout="steps"] .stations {
+  position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); column-gap: 64px;
+  list-style: none; padding: 0;
+}
+.station { position: relative; padding-top: 196px; }
+.station::before {
+  content: ""; position: absolute; left: 0; top: 101px; width: 48px; height: 48px; border-radius: 50%;
+  background: var(--platform); border: 10px solid var(--sign); box-sizing: border-box;
+}
+/* The route line's stop is the only "you are here"; a focus station is marked by weight, not orange. */
+.station.focus::before { background: var(--sign); width: 60px; height: 60px; top: 95px; }
+.station h3 { font-size: 64px; margin-bottom: 20px; color: var(--sign); }
+.station p { font-size: 34px; color: var(--ink-2); max-width: 30ch; }
+.station.focus { color: inherit; }
+.station .who { position: absolute; left: 0; top: 40px; font: 700 52px/1 var(--display); }
+
+/* ---------- layout: figure (one picture, one caption) ---------- */
+[data-layout="figure"] .body { display: grid; grid-template-columns: auto 1fr; grid-template-rows: 100%; column-gap: 72px; align-items: start; }
+.shot { height: 100%; border: 8px solid var(--sign); background: var(--sign); }
+.shot img { display: block; height: 100%; width: auto; }
+.caption { padding-top: 12px; display: grid; gap: 28px; }
+.caption p { font-size: 34px; }
+.caption .label { font: 700 44px/1.05 var(--display); }
+
+/* ---------- layout: board (direction board: one source, several exits) ---------- */
+[data-layout="board"] .board {
+  position: absolute; left: var(--m); right: var(--m); top: calc(var(--band) + 72px);
+  background: var(--sign); color: var(--white);
+  list-style: none; padding: 0 56px;
+}
+.board li {
+  display: grid; grid-template-columns: 420px 1fr 120px; align-items: center; column-gap: 48px;
+  height: 172px; border-top: 3px solid var(--sign-2);
+}
+.board li:first-child { border-top: 0; }
+.board .dest { font: 700 88px/1 var(--display); }
+.board .detail { font-size: 32px; color: var(--on-sign-2); }
+.board .arrow { width: 120px; height: 120px; }
+.board .later .dest, .board .later .arrow { color: #7c8288; }
+.board .tag {
+  display: inline-block; margin-left: 16px; padding: 4px 14px; vertical-align: middle;
+  border: 3px solid currentColor; font: 600 26px/1.2 var(--display); text-transform: uppercase; letter-spacing: 0.06em;
+}
+
+/* ---------- layout: timeline (the route ahead) ---------- */
+[data-layout="timeline"] .route-big {
+  position: absolute; left: 0; right: 0; top: 0; bottom: 0;
+  display: grid; grid-template-columns: repeat(3, 1fr); column-gap: 64px; list-style: none; padding: 0;
+}
+[data-layout="timeline"] .route-big::before {
+  content: ""; position: absolute; left: 0; right: 0; top: 150px; height: 14px; background: var(--sign);
+}
+.stop { position: relative; padding-top: 236px; }
+.stop::before {
+  content: ""; position: absolute; left: 0; top: 129px; width: 56px; height: 56px; border-radius: 50%;
+  background: var(--platform); border: 14px solid var(--sign); box-sizing: border-box;
+}
+.stop.here::before { background: var(--sign); width: 76px; height: 76px; top: 119px; }
+.stop .when { position: absolute; left: 0; top: 40px; font: 700 52px/1 var(--display); }
+.stop h3 { font-size: 56px; margin-bottom: 18px; }
+.stop ul { list-style: none; padding: 0; display: grid; gap: 10px; }
+.stop li { font-size: 32px; color: var(--ink-2); }
+
+/* ---------- layout: close ---------- */
+[data-layout="close"] h2 {
+  position: absolute; left: var(--m); top: 292px; width: 1300px;
+  font-size: 156px; font-weight: 800; line-height: 0.9;
+}
+[data-layout="close"] .go { position: absolute; right: var(--m); top: 268px; width: 280px; height: 280px; color: var(--signal); }
+[data-layout="close"] .cmd {
+  position: absolute; left: var(--m); top: 700px;
+  display: inline-flex; align-items: center; gap: 28px;
+  padding: 22px 36px; background: var(--platform); color: var(--sign);
+  font: 600 44px/1 "Cascadia Mono", Consolas, monospace;
+}
+[data-layout="close"] .cmd small { font: 500 30px/1 var(--text); color: var(--ink-2); }
+
+/* ---------- ruled numbers (every number has units and a rule) ---------- */
+table.ruled { border-collapse: collapse; font-size: 34px; }
+table.ruled th { font: 600 26px/1 var(--display); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); text-align: left; padding: 0 48px 14px 0; }
+table.ruled td { border-top: 3px solid var(--sign); padding: 16px 48px 16px 0; }
+table.ruled td.num { font: 700 64px/1 var(--display); text-align: right; }
+table.ruled .unit { font: 500 28px/1 var(--text); color: var(--ink-2); margin-left: 8px; }

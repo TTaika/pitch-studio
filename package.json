@@ -1,0 +1,16 @@
+{
+  "name": "pitch-studio",
+  "version": "1.0.0",
+  "description": "Local studio for personal pitch decks and videos, directed by pointing",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "pdf": "node scripts/cli.js pdf",
+    "shot": "node scripts/cli.js shot"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "playwright-core": "^1.56.1"
+  },
+  "private": true
+}
