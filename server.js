@@ -11,6 +11,8 @@ const STUDIO = path.join(ROOT, 'studio');
 const EXPORTS = path.join(ROOT, 'exports');
 const PORT = Number(process.env.PORT) || 4173;
 const GSAP = require.resolve('gsap/dist/gsap.min.js');
+const E = require('./lib/edit');
+const VIDEOS = E.VIDEOS;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8', '.css': 'text/css; charset=utf-8',
@@ -18,6 +20,8 @@ const MIME = {
   '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg',
   '.webp': 'image/webp', '.gif': 'image/gif', '.woff2': 'font/woff2', '.woff': 'font/woff',
   '.ttf': 'font/ttf', '.pdf': 'application/pdf', '.mp4': 'video/mp4',
+  '.m4v': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.mkv': 'video/x-matroska',
+  '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.ogg': 'audio/ogg', '.flac': 'audio/flac',
 };
 
 // ---------- helpers ----------
@@ -56,8 +60,66 @@ function serveFile(res, file) {
   });
 }
 
+// Media is streamed with Range support: a <video> can only seek when the server answers 206.
+function serveMedia(req, res, file) {
+  fs.stat(file, (err, st) => {
+    if (err || !st.isFile()) return send(res, 404, { error: 'not found' });
+    const type = MIME[path.extname(file).toLowerCase()] || 'application/octet-stream';
+    const m = /bytes=(\d*)-(\d*)/.exec(req.headers.range || '');
+    if (!m) {
+      res.writeHead(200, { 'Content-Type': type, 'Content-Length': st.size, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store' });
+      return fs.createReadStream(file).pipe(res);
+    }
+    const start = m[1] ? Number(m[1]) : Math.max(0, st.size - Number(m[2]));
+    const end = Math.min(m[1] && m[2] ? Number(m[2]) : st.size - 1, st.size - 1);
+    if (start >= st.size || end < start) {
+      res.writeHead(416, { 'Content-Range': `bytes */${st.size}` });
+      return res.end();
+    }
+    res.writeHead(206, { 'Content-Type': type, 'Content-Length': end - start + 1, 'Content-Range': `bytes ${start}-${end}/${st.size}`, 'Accept-Ranges': 'bytes', 'Cache-Control': 'no-store' });
+    fs.createReadStream(file, { start, end }).pipe(res);
+  });
+}
+
+// Feedback lives next to what it is about: decks/<id>/ or videos/<id>/.
 function feedbackFile(deck) { return path.join(DECKS, deck, 'feedback.json'); }
-function loadFeedback(deck) { return readJSON(feedbackFile(deck), []); }
+
+async function handleFeedback(req, res, file, id) {
+  const method = req.method;
+  const items = readJSON(file, []);
+  if (!id && method === 'GET') return send(res, 200, items);
+
+  if (!id && method === 'POST') {
+    const body = await readBody(req);
+    const item = {
+      id: `fb-${crypto.randomBytes(3).toString('hex')}`,
+      type: body.type,
+      status: 'open',
+      createdAt: new Date().toISOString(),
+      ...pick(body, ['slide', 'insertAfter', 'clip', 'target', 'comment', 'to', 'blocks', 'time', 'until']),
+    };
+    if (!['comment', 'adjust', 'layout'].includes(item.type)) return send(res, 400, { error: 'bad type' });
+    items.push(item);
+    writeJSON(file, items);
+    return send(res, 201, item);
+  }
+
+  const idx = items.findIndex((it) => it.id === id);
+  if (idx < 0) return send(res, 404, { error: 'unknown feedback item' });
+
+  if (method === 'PATCH') {
+    const body = await readBody(req);
+    Object.assign(items[idx], pick(body, ['comment', 'to', 'blocks', 'status', 'target', 'time', 'until']), { updatedAt: new Date().toISOString() });
+    writeJSON(file, items);
+    return send(res, 200, items[idx]);
+  }
+  if (method === 'DELETE') {
+    const [removed] = items.splice(idx, 1);
+    writeJSON(file, items);
+    return send(res, 200, removed);
+  }
+  return send(res, 405, { error: 'method not allowed' });
+}
 
 // ---------- slide rendering ----------
 
@@ -106,18 +168,82 @@ function broadcast(event) {
 }
 
 let pending = new Map();
-function watch(dir, scope) {
+function watch(dir, scope, onChange) {
   if (!fs.existsSync(dir)) return;
   fs.watch(dir, { recursive: true }, (_type, name) => {
     if (!name || name.endsWith('.tmp')) return;
     const rel = name.split(path.sep).join('/');
+    // Generated previews are not edits.
+    if (/\/media\/\.(proxy|thumbs)\//.test(rel)) return;
     // Debounce: editors and Claude often write a file in several steps.
-    clearTimeout(pending.get(rel));
-    pending.set(rel, setTimeout(() => {
-      pending.delete(rel);
+    const key = `${scope}:${rel}`;
+    clearTimeout(pending.get(key));
+    pending.set(key, setTimeout(() => {
+      pending.delete(key);
       broadcast({ type: 'change', scope, path: rel });
+      onChange?.(rel);
     }, 120));
   });
+}
+
+// ---------- video projects: media import + render ----------
+
+// Files being uploaded or imported right now, "<video>/<name>", so the watcher
+// doesn't import a half-written upload a second time.
+const importing = new Set();
+
+function startImport(video, name) {
+  const key = `${video}/${name}`;
+  importing.add(key);
+  return E.importMedia(video, name, { onStatus: (s) => broadcast({ type: 'media', video, ...s }) })
+    .catch((e) => console.error(`import ${key}: ${e.message}`))
+    .finally(() => importing.delete(key));
+}
+
+// A file dropped into videos/<id>/media/ by hand (Explorer, or Claude saving a generated
+// image) is imported like an upload once its size stops changing.
+function autoImport(rel) {
+  const m = /^([^/]+)\/media\/([^/.][^/]*)$/.exec(rel);
+  if (!m || !E.videoDir(m[1]) || importing.has(`${m[1]}/${m[2]}`)) return;
+  const [, video, name] = m;
+  const file = path.join(VIDEOS, video, 'media', name);
+  if (!E.kindOf(name) || E.loadMedia(video)[name]) return;
+  let last = -1;
+  const check = () => fs.stat(file, (err, st) => {
+    if (err || importing.has(`${video}/${name}`)) return;
+    if (st.size === last) startImport(video, name); else { last = st.size; setTimeout(check, 1000); }
+  });
+  check();
+}
+
+const renderJobs = new Map();
+function startRender(video, quality) {
+  const job = { state: 'running', percent: 0 };
+  renderJobs.set(video, job);
+  broadcast({ type: 'render', video, ...job });
+  let last = -1;
+  E.renderEdit(video, {
+    quality,
+    onProgress: ({ percent }) => {
+      if (percent === last) return;
+      last = job.percent = percent;
+      broadcast({ type: 'render', video, ...job });
+    },
+  }).then((r) => {
+    broadcast({ type: 'render', video, state: 'done', url: r.url, duration: r.duration });
+  }).catch((e) => {
+    console.error(e.message);
+    broadcast({ type: 'render', video, state: 'error', message: e.message.split('\n')[0] });
+  }).finally(() => renderJobs.delete(video));
+}
+
+// Everything the editor needs in one response. Slide HTML stays on the server.
+function videoState(id) {
+  const loaded = E.loadEdit(id);
+  const media = E.loadMedia(id);
+  const model = E.resolve(id, loaded.edit, media);
+  model.main = model.main.map(({ slides, ...item }) => (slides ? { ...item, slides: slides.map(({ html, ...s }) => s) } : item));
+  return { id, rev: loaded.rev, edit: loaded.edit, media, scenes: E.listScenes(id), model, render: renderJobs.get(id) || null };
 }
 
 // ---------- PDF export ----------
@@ -193,7 +319,19 @@ async function handle(req, res) {
   }
   if (parts[0] === 'exports') {
     const f = safeJoin(EXPORTS, parts.slice(1).join('/'));
-    return f ? serveFile(res, f) : send(res, 403, { error: 'forbidden' });
+    if (!f) return send(res, 403, { error: 'forbidden' });
+    return f.endsWith('.mp4') ? serveMedia(req, res, f) : serveFile(res, f);
+  }
+  if (url.pathname === '/edit') return serveFile(res, path.join(STUDIO, 'editor.html'));
+  if (parts[0] === 'videos' && method === 'GET') {
+    const f = safeJoin(VIDEOS, parts.slice(1).join('/'));
+    if (!f) return send(res, 403, { error: 'forbidden' });
+    return /\.(html|css|js|json|svg)$/i.test(f) ? serveFile(res, f) : serveMedia(req, res, f);
+  }
+  // /render-edit/:video → the edit as one page (proxies), driven by studio/edit-runtime.js
+  if (parts[0] === 'render-edit' && parts.length === 2) {
+    if (!E.videoDir(parts[1])) return send(res, 404, { error: 'unknown video project' });
+    return send(res, 200, E.editPage(parts[1], { mode: 'preview' }).html, MIME['.html']);
   }
   if (parts[0] === 'decks' && method === 'GET') {
     const f = safeJoin(DECKS, parts.slice(1).join('/'));
@@ -212,6 +350,7 @@ async function handle(req, res) {
   }
 
   if (parts[0] !== 'api') return send(res, 404, { error: 'not found' });
+  if (parts[1] === 'videos') return handleVideos(req, res, url, parts);
 
   // GET /api/decks
   if (parts[1] === 'decks' && parts.length === 2 && method === 'GET') {
@@ -239,41 +378,84 @@ async function handle(req, res) {
   if (parts[3] === 'video' && method === 'GET') return send(res, 200, videoJobs.get(deck) || { state: 'idle' });
 
   if (parts[3] !== 'feedback') return send(res, 404, { error: 'not found' });
-  const items = loadFeedback(deck);
-  const id = parts[4];
+  return handleFeedback(req, res, feedbackFile(deck), parts[4]);
+}
 
-  if (!id && method === 'GET') return send(res, 200, items);
-
-  if (!id && method === 'POST') {
+// /api/videos/...
+async function handleVideos(req, res, url, parts) {
+  const method = req.method;
+  if (parts.length === 2 && method === 'GET') {
+    const ids = fs.existsSync(VIDEOS) ? fs.readdirSync(VIDEOS).filter((d) => E.videoDir(d)) : [];
+    return send(res, 200, ids.map((id) => {
+      try { const { edit } = E.loadEdit(id); return { id, title: edit.title || id, duration: E.resolve(id, edit).duration }; } catch (e) { return { id, title: id, error: e.message }; }
+    }));
+  }
+  if (parts.length === 2 && method === 'POST') {
     const body = await readBody(req);
-    const item = {
-      id: `fb-${crypto.randomBytes(3).toString('hex')}`,
-      type: body.type,
-      status: 'open',
-      createdAt: new Date().toISOString(),
-      ...pick(body, ['slide', 'insertAfter', 'target', 'comment', 'to', 'blocks', 'time']),
-    };
-    if (!['comment', 'adjust', 'layout'].includes(item.type)) return send(res, 400, { error: 'bad type' });
-    items.push(item);
-    writeJSON(feedbackFile(deck), items);
-    return send(res, 201, item);
+    const id = String(body.id || body.title || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    try { E.createProject(id, body.title); } catch (e) { return send(res, 400, { error: e.message }); }
+    return send(res, 201, videoState(id));
   }
 
-  const idx = items.findIndex((it) => it.id === id);
-  if (idx < 0) return send(res, 404, { error: 'unknown feedback item' });
+  const id = parts[2];
+  if (!E.videoDir(id)) return send(res, 404, { error: 'unknown video project' });
 
-  if (method === 'PATCH') {
+  if (parts.length === 3 && method === 'GET') return send(res, 200, videoState(id));
+
+  // PUT /api/videos/:id  { edit, rev } → saved only if nobody (Claude) changed it meanwhile.
+  if (parts.length === 3 && method === 'PUT') {
     const body = await readBody(req);
-    Object.assign(items[idx], pick(body, ['comment', 'to', 'blocks', 'status', 'target']), { updatedAt: new Date().toISOString() });
-    writeJSON(feedbackFile(deck), items);
-    return send(res, 200, items[idx]);
+    const current = E.loadEdit(id);
+    if (body.rev && body.rev !== current.rev) return send(res, 409, { error: 'edit.json changed on disk', ...videoState(id) });
+    if (!body.edit || !Array.isArray(body.edit.main)) return send(res, 400, { error: 'edit.main must be an array' });
+    E.writeJSON(E.editFile(id), body.edit);
+    return send(res, 200, videoState(id));
   }
-  if (method === 'DELETE') {
-    const [removed] = items.splice(idx, 1);
-    writeJSON(feedbackFile(deck), items);
-    return send(res, 200, removed);
+
+  // POST /api/videos/:id/media?name=clip.mov   (raw file body, streamed to disk)
+  if (parts[3] === 'media' && parts.length === 4 && method === 'POST') {
+    const original = url.searchParams.get('name') || 'clip';
+    if (!E.kindOf(original)) return send(res, 400, { error: `Not a video, audio or image file: ${original}` });
+    const dir = E.mediaDir(id);
+    fs.mkdirSync(dir, { recursive: true });
+    const name = E.uniqueName(dir, original);
+    const key = `${id}/${name}`;
+    importing.add(key);
+    const file = path.join(dir, name);
+    const out = fs.createWriteStream(file);
+    req.pipe(out);
+    out.on('finish', () => {
+      startImport(id, name);
+      send(res, 202, { name, status: 'processing' });
+    });
+    const fail = (e) => { importing.delete(key); fs.rm(file, { force: true }, () => {}); if (!res.headersSent) send(res, 500, { error: e.message }); };
+    out.on('error', fail);
+    req.on('error', fail);
+    return;
   }
-  return send(res, 405, { error: 'method not allowed' });
+  // DELETE /api/videos/:id/media/:name  (only when nothing in the edit uses it)
+  if (parts[3] === 'media' && parts[4] && method === 'DELETE') {
+    const name = decodeURIComponent(parts[4]);
+    const { edit } = E.loadEdit(id);
+    const users = [...edit.main, ...edit.overlays, ...edit.audio].filter((c) => c.src === name).map((c) => c.id);
+    if (users.length) return send(res, 409, { error: `Still used by ${users.join(', ')}` });
+    const f = safeJoin(E.mediaDir(id), name);
+    if (!f) return send(res, 403, { error: 'forbidden' });
+    for (const p of [f, E.proxyPath(E.mediaDir(id), name), E.thumbPath(E.mediaDir(id), name)]) fs.rmSync(p, { force: true });
+    await E.removeMedia(id, name);
+    return send(res, 200, { name });
+  }
+
+  if (parts[3] === 'render' && method === 'POST') {
+    if (renderJobs.has(id)) return send(res, 409, { error: 'A render is already running for this video.' });
+    const body = await readBody(req);
+    startRender(id, body.quality === 'draft' ? 'draft' : 'looks');
+    return send(res, 202, { state: 'running' });
+  }
+  if (parts[3] === 'render' && method === 'GET') return send(res, 200, renderJobs.get(id) || { state: 'idle' });
+
+  if (parts[3] === 'feedback') return handleFeedback(req, res, path.join(VIDEOS, id, 'feedback.json'), parts[4]);
+  return send(res, 404, { error: 'not found' });
 }
 
 function pick(obj, keys) {
@@ -289,6 +471,8 @@ function start() {
   watch(DECKS, 'decks');
   watch(PROFILE, 'profile');
   watch(STUDIO, 'studio');
+  fs.mkdirSync(VIDEOS, { recursive: true });
+  watch(VIDEOS, 'videos', autoImport);
   return new Promise((resolve, reject) => {
     server.once('error', reject);
     server.listen(PORT, '127.0.0.1', () => {

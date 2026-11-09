@@ -151,6 +151,12 @@ Server-injected `.ps-route`: a 6px line with 26px stops. Past stops are filled, 
 ### Scene transport
 A bar under the canvas, exactly as wide as the slide: a play/pause icon button, a full-width scrubber and a mono time readout. The readout turns highlighter-coloured whenever the slide is off its settled frame, and comments made there carry an "at 0.7s" chip.
 
+### Video editor (studio/editor.*)
+The same shell with a media bin (232px), a 248px timeline across the bottom and the panel split into Clip (inspector) and Feedback. Timeline clips are told apart by material, not hue: footage shows its own frames (thumbnail strip), deck clips are platform-2 `#cfd3d6` with sign ink and slide cuts, animation scenes are sign `#1e2124` with a `#45484e` rule, overlays `#3a3d42`, audio a dark green-grey `#22302a`; a clip with a problem is hatched `#3a2622`. Clip corners 4px, ruler markers are the comment-pin shape at 16px. The highlighter marks only the selection, comment markers and the playhead-time when off rest; the playhead itself is studio text white.
+
+### Video overlays (profile/theme.css `.ov-*`)
+Platform Signage mounted over footage: charcoal enamel plates for titles, lower thirds and labels; the transit arrow and the highlight frame are the only orange, one at a time, because they point at "here".
+
 ### Studio mode switch
 A segmented radio group (View / Comment / Adjust / Block) with key hints. The active mode is `#3a3d42` with an inset border, and its icon takes the highlighter colour (block blue in Block mode).
 

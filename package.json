@@ -9,7 +9,9 @@
     "shot": "node scripts/cli.js shot",
     "video": "node scripts/cli.js video",
     "video-preview": "node scripts/cli.js video-preview",
-    "frames": "node scripts/cli.js frames"
+    "frames": "node scripts/cli.js frames",
+    "edit": "node scripts/cli.js edit",
+    "sample-video": "node scripts/sample-video.js"
   },
   "type": "commonjs",
   "dependencies": {

@@ -1,8 +1,8 @@
 # Pitch Studio
 
-Local tool for making personal pitch decks (and, from milestone 2, videos). Claude writes slides as HTML; the owner reviews them in the studio and points at what to change; Claude applies that feedback and records the taste it learns.
+Local tool for making personal pitch decks and videos. Claude writes slides as HTML; the owner reviews them in the studio and points at what to change; Claude applies that feedback and records the taste it learns. The video editor does the same for the owner's own footage.
 
-Run: `npm start` → http://127.0.0.1:4173/ (`?deck=<id>` picks a deck). The studio live-reloads whenever a slide, theme, or feedback file changes.
+Run: `npm start` → http://127.0.0.1:4173/ (`?deck=<id>` picks a deck), video editor at `/edit`. Both live-reload whenever a slide, theme, edit or feedback file changes.
 
 ## Layout
 
@@ -14,8 +14,9 @@ decks/<id>/slides/<slide>.html   One <section class="slide"> fragment, 1920×108
 decks/<id>/deck.css  Optional per-deck overrides (keep tiny; taste belongs in the profile).
 decks/<id>/assets/   Images for the deck (reference as assets/x.png; the render page has <base href="/decks/<id>/">).
 decks/<id>/feedback.json  Written by the studio. You read it and mark items done.
-studio/              The studio UI (vanilla JS). server.js serves everything.
-exports/             PDF output (gitignored).
+videos/<id>/          Video projects (see Video projects below).
+studio/              The studio + video editor UI (vanilla JS). server.js serves everything; lib/ holds deck, video and edit logic.
+exports/             PDF, MP4 and screenshot output (gitignored).
 ```
 
 ## Writing slides
@@ -49,9 +50,54 @@ Levers, from most local to most global:
 
 Rules: animate only with seekable GSAP tweens on the timeline the grammar builds (no CSS animations, timers, `Math.random`, autoplay media or external fonts/CDNs); the renderer seeks frame by frame.
 
+## Video projects
+
+The owner's own footage, cut together with deck scenes, animations and overlays. Editor: http://127.0.0.1:4173/edit (`?v=<id>`). Same loop as decks: they cut and point in the editor, you apply feedback with `/apply-feedback video <id>`.
+
+```
+videos/<id>/edit.json     The edit. You and the editor both write it; re-read before writing.
+videos/<id>/media.json    Server-owned index of imported files (kind, duration, size, hasAudio). Read only.
+videos/<id>/media/        Original files (+ .proxy/ and .thumbs/, generated). Save a generated image here and it is imported automatically.
+videos/<id>/scenes/       Animation scenes you write: <name>.html (+ <name>.css, <name>.js).
+videos/<id>/feedback.json Comments and sketches, each with a time on the video's timeline.
+```
+
+`edit.json`:
+
+```json
+{ "title": "Launch video", "fps": 30,
+  "main": [                                         // plays back to back
+    { "id": "c-intro", "type": "media", "src": "intro.mov", "in": 1.2, "out": 6, "volume": 1 },
+    { "id": "c-logo",  "type": "media", "src": "logo.png", "duration": 3 },
+    { "id": "c-deck",  "type": "deck", "deck": "pitch-studio", "slides": ["title", "how"], "durations": { "how": 5 } },
+    { "id": "c-anim",  "type": "scene", "scene": "app-steps", "duration": 6 } ],
+  "overlays": [                                     // on top of the picture, absolute times
+    { "id": "o-name", "kind": "lower", "text": "Name", "sub": "Role", "start": 0.6, "duration": 3.5,
+      "anim": "slide", "box": { "x": 96, "y": 820, "w": 760, "h": 150 } } ],
+  "audio": [ { "id": "a-music", "src": "music.mp3", "start": 0, "in": 0, "volume": 0.6 } ] }
+```
+
+- Overlay kinds: `title` (text, sub), `lower` (text, sub), `label` (text), `arrow` (text, `dir`: left|right|up|down|up-right), `highlight` (text: the tag under the frame), `image` (`src` from media), `anim` (`scene`). `anim`: rise|slide|fade|pop|wipe|none. `box` is canvas pixels on 1920×1080: for overlays the box IS the position (data, not a layout instruction), so set it directly.
+- Media `in`/`out` are seconds inside the source file; times elsewhere are seconds on the video. Deck clips reuse the deck's slides and motion untouched; `slides` picks a subset, `durations` retimes them for this video only.
+- Overlays use the Platform Signage look from `profile/theme.css` (`.ov-*`). Orange only for what's being pointed at (arrow, highlight), one at a time. If an overlay style is missing, extend the theme, don't inline styles.
+- Never invent facts in overlays either: placeholders like `[Name: fill in]`.
+
+**Animation scenes** ("make an animation of the product doing X"): `scenes/<name>.html` is one `<section class="anim" data-el="...">` filling its clip (1920×1080 on the main track, or the overlay's box), every meaningful element with a `data-el`. Style it in `scenes/<name>.css` with theme tokens (scope selectors under a scene class). Animate in `scenes/<name>.js`:
+
+```js
+PitchScenes.register('app-steps', function (tl, root, start, duration) {
+  tl.fromTo(root.querySelector('[data-el="headline"]'), { x: -90, opacity: 0 }, { x: 0, opacity: 1, duration: 0.6, ease: 'power3.out' }, start + 0.2);
+});
+```
+
+Same motion rules as slides: only seekable GSAP tweens on `tl` at absolute times (`start + …`), **`fromTo` not `from`**, no timers, CSS animations, randomness or external URLs. Use the owner's real product screenshots from `media/` when they exist; never draw fake UI with invented data. A scene without a `.js` falls back to the slide grammar. `videos/sample/` (`npm run sample-video`) has a working example (`scenes/route.*`).
+
+Check your work: `npm run edit -- <id> draft` renders `exports/videos/<id>.mp4` from the originals, then `npm run frames -- <id> 1 4.5 12` writes a contact sheet. Problems (missing media, scene file missing) are listed by the editor and in the render's lint output.
+
 ## Exporting
 
 - PDF: studio "Export PDF" button, or `npm run pdf -- <deck>` → `exports/<deck>.pdf` (uses installed Edge/Chrome through playwright-core).
 - Video: studio "Export video" button, or `npm run video -- <deck>` (add `draft` for a fast low-quality render) → `exports/<deck>.mp4`. Rendered by HyperFrames from a generated project in `exports/video/<deck>/`; FFmpeg comes from npm packages, telemetry is off.
 - Check motion by eye without opening anything: `npm run frames -- <deck> 0.5 2 6.9` writes a labelled contact sheet of video frames to `exports/shots/<deck>-frames.png`. `npm run video-preview -- <deck>` opens HyperFrames' own preview studio (only when the owner asks; it opens a browser).
+- Video project: editor "Render MP4" button or `npm run edit -- <id>` (`draft` for fast) → `exports/videos/<id>.mp4`, built in `exports/edit/<id>/` from the original footage.
 - **Never open browser tabs or windows on the owner's machine** for checks; screenshots and frame sheets are headless.

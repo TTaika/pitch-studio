@@ -240,3 +240,32 @@ table.ruled th { font: 600 26px/1 var(--display); text-transform: uppercase; let
 table.ruled td { border-top: 3px solid var(--sign); padding: 16px 48px 16px 0; }
 table.ruled td.num { font: 700 64px/1 var(--display); text-align: right; }
 table.ruled .unit { font: 500 28px/1 var(--text); color: var(--ink-2); margin-left: 8px; }
+
+/* ---------- video overlays (on top of the owner's footage) ----------
+   The same sign world, mounted over a video: charcoal enamel plates, condensed
+   lettering, the transit arrow. Orange only on the thing being pointed at
+   (arrow, highlight), at most one at a time. Each sits in its box (.ov-box). */
+.ov { width: 100%; height: 100%; box-sizing: border-box; font: 500 34px/1.3 var(--text); color: var(--white); -webkit-font-smoothing: antialiased; }
+.ov * { box-sizing: border-box; margin: 0; }
+.ov-title { background: var(--sign); padding: 40px 56px; display: flex; flex-direction: column; justify-content: center; gap: 16px; }
+.ov-title h2 { font: 700 96px/0.95 var(--display); letter-spacing: -0.01em; text-wrap: balance; }
+.ov-title p { color: var(--on-sign-2); font-size: 36px; text-wrap: pretty; }
+.ov-lower { height: auto; background: var(--sign); padding: 22px 36px 24px; display: flex; flex-direction: column; gap: 4px; }
+.ov-lower strong { font: 700 56px/1 var(--display); }
+.ov-lower span { color: var(--on-sign-2); font-size: 30px; }
+.ov-label { height: auto; width: auto; display: inline-block; background: var(--sign); padding: 12px 22px; font: 600 40px/1 var(--display); }
+.ov-arrow { color: var(--signal); display: flex; align-items: center; gap: 20px; }
+.ov-arrow svg { height: 100%; aspect-ratio: 1; fill: currentColor; flex: none; }
+.ov-arrow.left svg { rotate: 180deg; } .ov-arrow.up svg { rotate: -90deg; } .ov-arrow.down svg { rotate: 90deg; } .ov-arrow.up-right svg { rotate: -45deg; }
+.ov-arrow span { background: var(--sign); color: var(--white); padding: 12px 22px; font: 600 40px/1 var(--display); }
+.ov-highlight { border: 8px solid var(--signal); position: relative; }
+.ov-highlight span { position: absolute; left: -8px; top: 100%; background: var(--signal); color: var(--sign); padding: 10px 18px; font: 700 36px/1 var(--display); white-space: nowrap; }
+.ov-image img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.ov-anim { position: relative; overflow: hidden; }
+
+/* Animation scenes (videos/<id>/scenes/<name>.html): one <section class="anim"> that fills
+   its clip, 1920x1080 on the main track or its overlay box. Same tokens as slides. */
+.anim { position: absolute; inset: 0; overflow: hidden; background: var(--platform); color: var(--sign); font: 500 34px/1.35 var(--text); -webkit-font-smoothing: antialiased; }
+.ov-anim .anim { background: transparent; }
+.anim * { box-sizing: border-box; margin: 0; }
+.anim h1, .anim h2, .anim h3 { font-family: var(--display); font-weight: 700; line-height: 0.95; letter-spacing: -0.01em; }

@@ -3,7 +3,8 @@
 //   node scripts/cli.js shot <deck> [slide]   → exports/shots/<deck>-<slide>.png (all slides if omitted)
 //   node scripts/cli.js video <deck> [draft]  → exports/<deck>.mp4 (HyperFrames; "draft" renders fast)
 //   node scripts/cli.js video-preview <deck>  → HyperFrames preview studio for the whole video
-//   node scripts/cli.js frames <deck> <t...>  → exports/shots/<deck>-frames.png, a contact sheet of
+//   node scripts/cli.js edit <video> [draft]  → exports/videos/<video>.mp4 (a video project, videos/<id>/)
+//   node scripts/cli.js frames <name> <t...>  → exports/shots/<name>-frames.png, a contact sheet of
 //                                               video frames at those seconds (check motion by eye)
 // Reuses a running studio server, or starts one for the duration of the command.
 const fs = require('fs');
@@ -46,8 +47,9 @@ async function shot(deck, slide) {
 function frames(deck, times) {
   const { execFileSync } = require('child_process');
   const ffmpeg = require('ffmpeg-static');
-  const video = path.join(__dirname, '..', 'exports', `${deck}.mp4`);
-  if (!fs.existsSync(video)) throw new Error(`No video yet: run "npm run video -- ${deck}" first.`);
+  // A deck video, or a video project's (exports/videos/<id>.mp4).
+  const video = [path.join(__dirname, '..', 'exports', `${deck}.mp4`), path.join(__dirname, '..', 'exports', 'videos', `${deck}.mp4`)].find((f) => fs.existsSync(f));
+  if (!video) throw new Error(`No video yet: run "npm run video -- ${deck}" (deck) or "npm run edit -- ${deck}" (video project) first.`);
   const out = path.join(__dirname, '..', 'exports', 'shots', `${deck}-frames.png`);
   fs.mkdirSync(path.dirname(out), { recursive: true });
   const cols = Math.min(4, times.length);
@@ -68,8 +70,8 @@ function frames(deck, times) {
 
 (async () => {
   const [cmd, deck, slide] = process.argv.slice(2);
-  if (!['pdf', 'shot', 'video', 'video-preview', 'frames'].includes(cmd) || !deck) {
-    console.log('Usage: node scripts/cli.js pdf <deck> | shot <deck> [slide] | video <deck> [draft] | video-preview <deck> | frames <deck> <seconds...>');
+  if (!['pdf', 'shot', 'video', 'video-preview', 'frames', 'edit'].includes(cmd) || !deck) {
+    console.log('Usage: node scripts/cli.js pdf <deck> | shot <deck> [slide] | video <deck> [draft] | video-preview <deck> | frames <deck|video> <seconds...> | edit <video> [draft]');
     process.exit(1);
   }
   if (cmd === 'frames') {
@@ -87,6 +89,16 @@ function frames(deck, times) {
       onProgress: ({ percent }) => { if (percent >= last + 10 || percent === 100) { last = percent; console.log(`${percent}%`); } },
     });
     console.log(`${r.file} (${r.duration}s, ${r.scenes} scenes)`);
+    return;
+  }
+  if (cmd === 'edit') {
+    const { renderEdit } = require('../lib/edit');
+    let last = -1;
+    const r = await renderEdit(deck, {
+      quality: slide === 'draft' ? 'draft' : 'looks',
+      onProgress: ({ percent }) => { if (percent >= last + 10 || percent === 100) { last = percent; console.log(`${percent}%`); } },
+    });
+    console.log(`${r.file} (${r.duration}s)`);
     return;
   }
   if (cmd === 'video-preview') {

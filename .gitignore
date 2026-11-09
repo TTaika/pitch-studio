@@ -4,3 +4,7 @@ exports/
 .claude/worktrees/
 .playwright-mcp/
 decks/*/feedback.json
+videos/*/media/
+videos/*/media.json
+videos/*/feedback.json
+videos/sample/

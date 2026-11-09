@@ -1,9 +1,14 @@
 ---
-description: Apply the open studio feedback to a deck's slides and learn lasting taste
-argument-hint: "[deck-id]  (defaults to the only deck, or asks)"
+description: Apply the open studio feedback to a deck (or a video project) and learn lasting taste
+argument-hint: "[deck-id] | video <video-id>  (defaults to the only deck, or asks)"
 ---
 
-Apply the open feedback for deck `$ARGUMENTS` (if empty: use the only deck in `decks/`, or ask which one when there are several).
+Arguments: `$ARGUMENTS`
+
+- `video <id>` → apply the feedback of the **video project** `videos/<id>/` (section B).
+- Otherwise it's a **deck** id (if empty: use the only deck in `decks/`, or ask which one when there are several) (section A).
+
+## A. Deck
 
 Follow the **Applying feedback** section of `CLAUDE.md` exactly. In short:
 
@@ -16,4 +21,19 @@ Follow the **Applying feedback** section of `CLAUDE.md` exactly. In short:
 4. If a comment expresses taste that applies beyond that one element, append a dated rule under **Learned rules** in `profile/style.md`. Don't add rules for one-off content fixes.
 5. Screenshot every slide you changed (`npm run shot -- <deck> <slide>`) and look at the images. For motion changes, `npm run video -- <deck> draft` then `npm run frames -- <deck> <seconds...>` around the moment. Fix anything broken before reporting. Never open browser windows.
 
-Finish with a short report: what changed per slide, any items marked wontfix and why, and the exact rules added to the style profile (or "no new rules").
+## B. Video project
+
+Follow the **Video projects** section of `CLAUDE.md`. In short:
+
+1. Read `profile/style.md`, `videos/<id>/edit.json`, `videos/<id>/media.json` (what footage exists, its length) and `videos/<id>/feedback.json`. Handle every `"status": "open"` item.
+2. Every item has a `time` (seconds on the video's timeline) and usually a `clip` (the id of the main-track item or overlay it's about). `until` means it's about the stretch `time`–`until`. To see the moment: `npm run edit -- <id> draft`, then `npm run frames -- <id> <seconds...>`.
+   - `comment` on an overlay (`clip` is an overlay id): edit that overlay in `edit.json` (text, start, duration, anim, box).
+   - `comment` on footage (`target.src`, `target.mediaTime`): change the cut in `edit.json` (trim `in`/`out`, split, reorder, remove, add an overlay over it). "Animate the product here" → write an animation scene (below) and put it on the main track or as an `anim` overlay.
+   - `comment` with `slide` set: it's about a deck slide inside a deck clip. Change the slide in `decks/<deck>/slides/` (deck rules apply) unless it's about timing in this video, then use the clip's `durations`.
+   - `comment` on a scene (`clip` is a `scene` item): edit `videos/<id>/scenes/<name>.html/.css/.js`.
+   - `layout`: labelled blocks sketched on the frame between `time` and `until`. Build them as overlays (`edit.json` overlays with those boxes) or as an animation scene when a block needs real motion.
+3. Edit `edit.json` carefully: re-read it right before writing, keep every id you don't remove, give new items new unique ids. The studio shows the change live.
+4. Re-read `feedback.json`, mark items `done` with a one-sentence `resolution` (or `wontfix` with why). Promote lasting taste to **Learned rules** in `profile/style.md` as for decks.
+5. Verify: `npm run edit -- <id> draft` and `npm run frames -- <id> <seconds...>` around every moment you changed; look at the sheet. Never open browser windows.
+
+Finish with a short report: what changed per item, any wontfix and why, and the exact rules added to the style profile (or "no new rules").

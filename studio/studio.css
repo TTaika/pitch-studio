@@ -62,9 +62,17 @@ kbd {
   background: var(--shell);
   border-bottom: 1px solid var(--line);
 }
-.deck-name { display: flex; align-items: baseline; gap: 8px; min-width: 0; white-space: nowrap; }
+.deck-name { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; }
 .deck-name .app { color: var(--text-3); font-weight: 600; }
 .deck-name .sep { color: var(--line-2); }
+/* Decks | Videos: the two halves of the studio. */
+.apps { display: flex; gap: 2px; align-self: center; }
+.apps a {
+  color: var(--text-3); font-weight: 600; text-decoration: none;
+  padding: 4px 7px; border-radius: 4px;
+}
+.apps a:hover { color: var(--text); background: rgba(255, 255, 255, 0.06); }
+.apps a[aria-current="page"] { color: var(--text); background: var(--raise); }
 #deckTitle { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 
 .modes {

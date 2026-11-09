@@ -79,5 +79,34 @@
     return { rest: rest };
   }
 
-  global.PitchMotion = { build: build, EXIT: EXIT };
+  // Overlays on footage (titles, labels, arrows...): one short entrance, hold, a quick
+  // fade before the clip ends. fromTo so seeking backwards is always exact.
+  var OVERLAY_OUT = 0.3;
+  var ENTER = {
+    fade: [{ opacity: 0 }, { opacity: 1, duration: 0.35, ease: 'power1.out' }],
+    rise: [{ y: 36, opacity: 0 }, { y: 0, opacity: 1, duration: 0.5, ease: 'power3.out' }],
+    slide: [{ x: -90, opacity: 0 }, { x: 0, opacity: 1, duration: 0.55, ease: 'power3.out' }],
+    pop: [{ scale: 0.5, opacity: 0 }, { scale: 1, opacity: 1, duration: 0.45, ease: 'back.out(2.2)' }],
+    wipe: [{ clipPath: 'inset(0 100% 0 0)' }, { clipPath: 'inset(0 0% 0 0)', duration: 0.6, ease: 'power2.inOut' }],
+  };
+  function overlay(tl, el, start, duration, anim) {
+    if (!el) return;
+    var enter = ENTER[anim];
+    if (enter) tl.fromTo(el, enter[0], enter[1], start);
+    if (duration > 1) tl.to(el, { opacity: 0, duration: OVERLAY_OUT, ease: 'power1.in' }, start + duration - OVERLAY_OUT - 0.02);
+  }
+
+  // Animation scenes Claude writes per video project (videos/<id>/scenes/<name>.js):
+  //   PitchScenes.register('name', function (tl, root, start, duration) { tl.fromTo(...) });
+  // A scene without a script falls back to the slide grammar, so plain markup still moves.
+  var scenes = {};
+  global.PitchScenes = {
+    register: function (name, fn) { scenes[name] = fn; },
+    run: function (name, tl, root, start, duration) {
+      if (scenes[name]) scenes[name](tl, root, start, duration);
+      else build(tl, root, start, duration, { exit: false });
+    },
+  };
+
+  global.PitchMotion = { build: build, overlay: overlay, EXIT: EXIT };
 })(typeof window !== 'undefined' ? window : globalThis);
