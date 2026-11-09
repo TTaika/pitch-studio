@@ -20,7 +20,7 @@ npm start            # → http://127.0.0.1:4173/
    | `F` | (any) | Show or hide the feedback panel, for more room on the slide. |
    | `B` | Block | Draw labelled boxes for the layout you want. "Sketch new slide" sketches a slide that doesn't exist yet. |
 
-3. Click **Copy prompt for Claude**, paste it into Claude Code. Claude applies everything, marks items done with a note, and adds lasting taste to `profile/style.md` → *Learned rules*.
+3. In Claude Code (started in this folder) run `/apply-feedback <deck>`. The **Copy prompt for Claude** button copies exactly that. Claude applies everything, marks items done with a note, and adds lasting taste to `profile/style.md` → *Learned rules*.
 4. **Export PDF** when it's right (`npm run pdf -- <deck>` works too).
 
 Moves and sketches are instructions, not edits: the studio never rewrites your slides. Claude rebuilds them properly through the layout system.

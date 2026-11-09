@@ -27,7 +27,7 @@ exports/             PDF output (gitignored).
 
 ## Applying feedback
 
-When asked to apply feedback (the studio's "Copy prompt for Claude" button produces that request):
+When asked to apply feedback (usually via the `/apply-feedback <deck>` slash command, which the studio's "Copy prompt for Claude" button copies):
 
 1. Read `decks/<id>/feedback.json` and handle every item with `"status": "open"`.
 2. Item types (all coordinates are canvas pixels on the 1920×1080 slide):

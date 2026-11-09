@@ -786,8 +786,8 @@
   // ---------- top bar actions ----------
   $('#copyPrompt').addEventListener('click', async () => {
     const open = state.feedback.filter((f) => f.status === 'open').length;
-    const text = `Apply the open feedback in decks/${state.deck.id}/feedback.json (${open} item${open === 1 ? '' : 's'}), following CLAUDE.md.`;
-    try { await navigator.clipboard.writeText(text); toast('Copied. Paste it into Claude Code.'); }
+    const text = `/apply-feedback ${state.deck.id}`;
+    try { await navigator.clipboard.writeText(text); toast(`Copied "${text}" (${open} open item${open === 1 ? '' : 's'}). Paste it into Claude Code.`); }
     catch { toast(text); }
   });
 
