@@ -69,8 +69,9 @@ videos/<id>/feedback.json Comments and sketches, each with a time on the video's
   "main": [                                         // plays back to back
     { "id": "c-intro", "type": "media", "src": "intro.mov", "in": 1.2, "out": 6, "volume": 1 },
     { "id": "c-logo",  "type": "media", "src": "logo.png", "duration": 3 },
-    { "id": "c-deck",  "type": "deck", "deck": "pitch-studio", "slides": ["title", "how"], "durations": { "how": 5 } },
-    { "id": "c-anim",  "type": "scene", "scene": "app-steps", "duration": 6 } ],
+    { "id": "c-deck",  "type": "deck", "deck": "pitch-studio", "slides": ["title", "how"], "durations": { "how": 5 },
+      "transition": { "kind": "crossfade", "duration": 0.6 } },  // into this clip from the one before
+    { "id": "c-anim",  "type": "scene", "scene": "app-steps", "duration": 6, "prompt": "the app's three steps" } ],
   "overlays": [                                     // on top of the picture, absolute times
     { "id": "o-name", "kind": "lower", "text": "Name", "sub": "Role", "start": 0.6, "duration": 3.5,
       "anim": "slide", "box": { "x": 96, "y": 820, "w": 760, "h": 150 } } ],
@@ -81,6 +82,9 @@ videos/<id>/feedback.json Comments and sketches, each with a time on the video's
 - Media `in`/`out` are seconds inside the source file; times elsewhere are seconds on the video. Deck clips reuse the deck's slides and motion untouched; `slides` picks a subset, `durations` retimes them for this video only.
 - Overlays use the Platform Signage look from `profile/theme.css` (`.ov-*`). Orange only for what's being pointed at (arrow, highlight), one at a time. If an overlay style is missing, extend the theme, don't inline styles.
 - Never invent facts in overlays either: placeholders like `[Name: fill in]`.
+- **Transitions**: `transition` on a main item is the transition *into* it from the previous item (ignored on the first). `kind`: `cut` (or no field) | `crossfade` | `dip` (`color`: black|white|sign|signal) | `wipe` / `push` (`dir`: left|right|up|down, the way the motion travels) | `route` (the orange route line sweeps across, `dir`: left|right). `duration` in seconds (default 0.6), capped at half of either clip. The two clips overlap by that much, so **every transition makes the video that much shorter** and moves every later clip earlier: re-check overlay times after adding one. Footage sound crossfades over the overlap. Motion lives in `PitchMotion.transition` (`profile/motion.js`), the route line's look in `profile/theme.css` (`.tx-route`). Cuts are taste: a few kinds per video, each with a reason; most seams stay straight cuts.
+
+**Animation requests**: the owner presses **+ Animation** on the main track (or on a cut) and describes one. The editor adds a placeholder `scene` clip with a `prompt` and a free scene name (it shows "Animation on its way" until the file exists) and an `animation` feedback item (`clip` = that clip, `comment` = the prompt, `target.scene` = the name). Write `scenes/<that name>.*` for the clip's full 1920×1080 frame and its `duration`; leave the `prompt` field in place.
 
 **Animation scenes** ("make an animation of the product doing X"): `scenes/<name>.html` is one `<section class="anim" data-el="...">` filling its clip (1920×1080 on the main track, or the overlay's box), every meaningful element with a `data-el`. Style it in `scenes/<name>.css` with theme tokens (scope selectors under a scene class). Animate in `scenes/<name>.js`:
 

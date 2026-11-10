@@ -269,3 +269,13 @@ table.ruled .unit { font: 500 28px/1 var(--text); color: var(--ink-2); margin-le
 .ov-anim .anim { background: transparent; }
 .anim * { box-sizing: border-box; margin: 0; }
 .anim h1, .anim h2, .anim h3 { font-family: var(--display); font-weight: 700; line-height: 0.95; letter-spacing: -0.01em; }
+
+/* An animation the owner asked for that Claude hasn't written yet. */
+.anim.ps-pending { display: flex; flex-direction: column; justify-content: center; gap: 32px; padding: 0 var(--m); background: var(--sign); color: var(--white); }
+.anim.ps-pending p { font: 600 40px/1 var(--display); text-transform: uppercase; letter-spacing: 0.08em; color: var(--signal); }
+.anim.ps-pending blockquote { font: 700 84px/1 var(--display); max-width: 1500px; text-wrap: balance; }
+
+/* Route-line transition (edit.json transition "route"): the orange line of the route
+   sweeps across with a stop roundel on it, revealing the next clip behind it. */
+.tx-route i { position: absolute; top: 0; bottom: 0; left: 0; width: 28px; margin-left: -14px; background: var(--signal); }
+.tx-route i::after { content: ""; position: absolute; left: 50%; top: 50%; width: 76px; height: 76px; margin: -38px 0 0 -38px; box-sizing: border-box; border-radius: 50%; background: var(--white); border: 14px solid var(--signal); }

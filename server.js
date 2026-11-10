@@ -98,7 +98,7 @@ async function handleFeedback(req, res, file, id) {
       createdAt: new Date().toISOString(),
       ...pick(body, ['slide', 'insertAfter', 'clip', 'target', 'comment', 'to', 'blocks', 'time', 'until']),
     };
-    if (!['comment', 'adjust', 'layout'].includes(item.type)) return send(res, 400, { error: 'bad type' });
+    if (!['comment', 'adjust', 'layout', 'animation'].includes(item.type)) return send(res, 400, { error: 'bad type' });
     items.push(item);
     writeJSON(file, items);
     return send(res, 201, item);

@@ -32,6 +32,8 @@ Follow the **Video projects** section of `CLAUDE.md`. In short:
    - `comment` with `slide` set: it's about a deck slide inside a deck clip. Change the slide in `decks/<deck>/slides/` (deck rules apply) unless it's about timing in this video, then use the clip's `durations`.
    - `comment` on a scene (`clip` is a `scene` item): edit `videos/<id>/scenes/<name>.html/.css/.js`.
    - `layout`: labelled blocks sketched on the frame between `time` and `until`. Build them as overlays (`edit.json` overlays with those boxes) or as an animation scene when a block needs real motion.
+   - `animation`: the owner asked for a new full-frame animation with **+ Animation**. `clip` is its placeholder `scene` item, `target.scene` the scene name, `comment` what it should show. Write `videos/<id>/scenes/<target.scene>.html/.css/.js` for the clip's `duration` (CLAUDE.md → Animation scenes). Frame it around their words, use their real screenshots from `media/` where the prompt is about their product, and don't invent data.
+   - A comment about how one clip leads into the next ("make this cut softer", "slide the next one in") → set `transition` on the later main item (CLAUDE.md → Transitions).
 3. Edit `edit.json` carefully: re-read it right before writing, keep every id you don't remove, give new items new unique ids. The studio shows the change live.
 4. Re-read `feedback.json`, mark items `done` with a one-sentence `resolution` (or `wontfix` with why). Promote lasting taste to **Learned rules** in `profile/style.md` as for decks.
 5. Verify: `npm run edit -- <id> draft` and `npm run frames -- <id> <seconds...>` around every moment you changed; look at the sheet. Never open browser windows.

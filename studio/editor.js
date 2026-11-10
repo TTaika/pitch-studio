@@ -29,6 +29,7 @@
     sel: null,           // { lane: 'main'|'overlays'|'audio', id }
     hover: null,
     popover: null,
+    tlPop: null,         // timeline popover: { kind: 'tx', id } | { kind: 'anim', index }
     range: null,         // { from, to } dragged on the ruler (comment mode)
     selBlock: null,
     activeItem: null,
@@ -261,7 +262,7 @@
     const scenes = p?.scenes || [];
     const sl = $('#sceneList');
     if (!scenes.length) {
-      sl.innerHTML = '<li class="bin-empty">None yet. Describe one to Claude ("an animation of the app\'s three steps"); it lands here.</li>';
+      sl.innerHTML = '<li class="bin-empty">None yet. Press <b>+ Animation</b> at the end of the main track and describe one; Claude makes it and it lands here.</li>';
     } else {
       sl.replaceChildren(...scenes.map((name) => {
         const li = document.createElement('li');
@@ -473,7 +474,8 @@
 
   // ---------- timeline ----------
   function fitPps() {
-    const w = tlScroll.clientWidth - PAD * 2 - 60;
+    // Leave room after the last clip for the "+ Animation" tile.
+    const w = tlScroll.clientWidth - PAD * 2 - 140;
     return clamp(w / Math.max(duration(), 5), 4, 400);
   }
   function setZoom(pps, fitMode = false) {
@@ -556,7 +558,9 @@
     const mainLane = laneEl('main', ROW.main);
     mainLane.classList.add('main');
     for (const c of m.main) mainLane.append(clipEl('main', c, 0));
-    if (!m.main.length) mainLane.append(Object.assign(document.createElement('span'), { className: 'lane-empty', textContent: 'Drag footage, a deck or an animation here. Clips play back to back.' }));
+    m.main.forEach((c, i) => { if (i) mainLane.append(seamEl(c)); });
+    mainLane.append(addAnimEl(m.duration));
+    if (!m.main.length) mainLane.append(Object.assign(document.createElement('span'), { className: 'lane-empty', textContent: 'Drag footage, a deck or an animation here, or describe a new animation. Clips play back to back.' }));
     laneEls.push(mainLane); headEls.push(head('Main', 'i-video', ROW.main + 1));
 
     const auLane = laneEl('audio', au.rows * ROW.audio);
@@ -614,8 +618,10 @@
     el.className = 'clip';
     el.dataset.lane = lane;
     el.dataset.id = c.id;
-    el.style.left = x(c.start) + 'px';
-    el.style.width = Math.max(4, c.duration * state.pps) + 'px';
+    // Main clips are drawn butting at the middle of each transition overlap.
+    const vis = visualSpan(lane, c);
+    el.style.left = x(vis.start) + 'px';
+    el.style.width = Math.max(4, vis.duration * state.pps) + 'px';
     if (lane !== 'main') {
       const h = ROW[lane === 'overlays' ? 'overlay' : 'audio'];
       Object.assign(el.style, { top: row * h + 3 + 'px', height: h - 6 + 'px', bottom: 'auto' });
@@ -636,7 +642,7 @@
       label = `Deck · ${c.deck}`;
       edges = false;
       (c.slides || []).forEach((s, i) => {
-        const left = (s.start - c.start) * state.pps;
+        const left = (s.start - vis.start) * state.pps;
         if (i) el.append(Object.assign(document.createElement('div'), { className: 'cut', style: `left:${left}px` }));
         const n = document.createElement('div');
         n.className = 'slide-name';
@@ -647,6 +653,7 @@
     } else if (c.type === 'scene') {
       el.classList.add('scene');
       label = `Animation · ${c.scene}`;
+      if (c.pending) { el.classList.add('pending'); el.classList.remove('missing'); sub = `${fmtShort(c.duration)} · waiting for Claude`; }
     } else if (lane === 'overlays') {
       el.classList.add('overlay-c');
       label = c.kind === 'image' ? c.src : c.kind === 'anim' ? `Animation · ${c.scene}` : c.text || c.kind;
@@ -664,6 +671,202 @@
     el.title = `${label} (${fmt(c.start)} – ${fmt(c.start + c.duration)})${hasWarning(c.id) ? '\n' + model().warnings.filter((w) => w.startsWith(c.id + ':')).join('\n') : ''}`;
     if (edges) el.append(Object.assign(document.createElement('div'), { className: 'edge l' }), Object.assign(document.createElement('div'), { className: 'edge r' }));
     return el;
+  }
+
+  // ---------- transitions + animation requests (main track) ----------
+  const TX_NAMES = { cut: 'Cut', crossfade: 'Crossfade', dip: 'Dip', wipe: 'Wipe', push: 'Push', route: 'Route line' };
+  const TX_HELP = {
+    cut: 'Straight cut, no overlap.',
+    crossfade: 'The next clip fades in over this one.',
+    dip: 'Fades out to a colour, then into the next clip.',
+    wipe: 'A hard edge travels across and reveals the next clip.',
+    push: 'The next clip pushes this one off the frame.',
+    route: 'The orange route line sweeps across with the next clip behind it.',
+  };
+  const TX_DIRS = { left: 'Leftward', right: 'Rightward', up: 'Upward', down: 'Downward' };
+  const TX_COLORS = { black: 'Black', white: 'White', sign: 'Sign charcoal', signal: 'Signal orange' };
+  const mainLabel = (c) => (c.type === 'media' ? c.src : c.type === 'deck' ? `deck ${c.deck}` : `animation ${c.scene}`);
+
+  function visualSpan(lane, c) {
+    if (lane !== 'main') return c;
+    const a = (c.tin || 0) / 2, b = (c.tout || 0) / 2;
+    return { start: c.start + a, duration: c.duration - a - b };
+  }
+
+  // The cut before main clip c: a chip spanning the overlap when there's a transition,
+  // a small marker on the cut otherwise. Both open the transition popover.
+  function seamEl(c) {
+    const tx = c.transition;
+    const b = document.createElement('button');
+    b.className = 'seam' + (tx ? ' tx' : '') + (state.tlPop?.kind === 'tx' && state.tlPop.id === c.id ? ' open' : '');
+    b.dataset.id = c.id;
+    if (tx) {
+      const w = Math.max(18, c.tin * state.pps);
+      Object.assign(b.style, { left: x(c.start + c.tin / 2) - w / 2 + 'px', width: w + 'px' });
+    } else b.style.left = x(c.start) + 'px';
+    const what = tx ? `${TX_NAMES[tx.kind]}, ${fmtShort(tx.duration)}` : 'Cut';
+    b.title = `${what} into ${mainLabel(c)}. Click to change, or put an animation here.`;
+    b.setAttribute('aria-label', b.title);
+    b.innerHTML = '<svg><use href="#i-tx"/></svg>';
+    if (tx && c.tin * state.pps >= 74) b.insertAdjacentHTML('beforeend', `<span>${esc(TX_NAMES[tx.kind])}</span>`);
+    b.addEventListener('click', () => openTxPop(c.id, b));
+    return b;
+  }
+  function addAnimEl(dur) {
+    const b = document.createElement('button');
+    b.className = 'add-anim' + (state.tlPop?.kind === 'anim' && state.tlPop.index == null ? ' open' : '');
+    b.style.left = x(dur) + (dur ? 8 : 0) + 'px';
+    b.title = 'Describe a new full-frame animation; Claude makes it';
+    b.innerHTML = '<svg><use href="#i-plus"/></svg><span>Animation</span>';
+    b.addEventListener('click', () => openAnimPop(null, b));
+    return b;
+  }
+
+  // Timeline popovers float above the timeline (fixed), next to what opened them.
+  function showTlPop(node, anchor) {
+    $('.tl-pop')?.remove();
+    node.classList.add('pop', 'tl-pop');
+    node.addEventListener('pointerdown', (e) => e.stopPropagation());
+    document.body.append(node);
+    const r = anchor.getBoundingClientRect();
+    const pw = node.offsetWidth, ph = node.offsetHeight;
+    const left = clamp(r.left + r.width / 2 - pw / 2, 8, innerWidth - pw - 8);
+    const top = r.top - ph - 10 >= 8 ? r.top - ph - 10 : Math.min(r.bottom + 10, innerHeight - ph - 8);
+    Object.assign(node.style, { left: left + 'px', top: top + 'px' });
+    $$('.seam.open, .add-anim.open').forEach((el) => el.classList.remove('open'));
+    anchor.classList.add('open');
+  }
+  function closeTlPop() {
+    if (!state.tlPop) return false;
+    state.tlPop = null;
+    $('.tl-pop')?.remove();
+    $$('.seam.open, .add-anim.open').forEach((el) => el.classList.remove('open'));
+    return true;
+  }
+  document.addEventListener('pointerdown', (e) => { if (state.tlPop && !e.target.closest('.tl-pop, .seam, .add-anim')) closeTlPop(); });
+
+  function setTransition(id, patch) {
+    return saveEdit((edit) => {
+      const it = itemIn(edit, 'main', id);
+      if (!it) return;
+      const next = { kind: 'crossfade', duration: 0.6, ...(it.transition || {}), ...patch };
+      if (next.kind === 'cut') delete it.transition;
+      else it.transition = next;
+    });
+  }
+
+  function openTxPop(id, anchor) {
+    pause();
+    closePopover();
+    const c = resolvedOf('main', id);
+    if (!c) return;
+    const raw = itemIn(state.project.edit, 'main', id)?.transition || {};
+    const kind = c.transition?.kind || 'cut';
+    state.tlPop = { kind: 'tx', id };
+    const node = document.createElement('div');
+    node.className = 'tx-pop';
+    const wanted = raw.duration ?? 0.6;
+    // The route line only runs sideways; up/down read as left/right there.
+    const dir = kind === 'route' ? (['right', 'down'].includes(c.transition.dir) ? 'right' : 'left') : c.transition?.dir;
+    const dirs = Object.entries(TX_DIRS).filter(([d]) => kind !== 'route' || d === 'left' || d === 'right');
+    const opts = kind === 'cut' ? '' : `<div class="tx-opts">
+        <label>Length<span class="unit-in"><input type="number" data-tx="duration" min="0.1" max="3" step="0.1" value="${r2(wanted)}"><i>s</i></span></label>
+        ${['wipe', 'push', 'route'].includes(kind) ? `<label>Direction<select data-tx="dir">${dirs.map(([d, n]) => `<option value="${d}"${d === dir ? ' selected' : ''}>${n}</option>`).join('')}</select></label>` : ''}
+        ${kind === 'dip' ? `<label>Colour<select data-tx="color">${Object.entries(TX_COLORS).map(([k, n]) => `<option value="${k}"${k === c.transition.color ? ' selected' : ''}>${n}</option>`).join('')}</select></label>` : ''}
+      </div>
+      ${c.transition.duration < wanted - 0.01 ? `<p class="tx-note">Shortened to ${fmtShort(c.transition.duration)}: a transition is at most half of either clip.</p>` : ''}`;
+    node.innerHTML = `
+      <div class="pop-head"><code></code><button class="icon-btn" data-act="close" title="Close (Esc)"><svg><use href="#i-close"/></svg></button></div>
+      <div class="tx-kinds" role="radiogroup" aria-label="Transition">${Object.entries(TX_NAMES).map(([k, n]) => `<button role="radio" data-kind="${k}" aria-checked="${k === kind}">${n}</button>`).join('')}</div>
+      <p class="tx-help">${esc(TX_HELP[kind])}${kind === 'cut' ? '' : ` The video gets ${fmtShort(c.transition.duration)} shorter.`}</p>
+      ${opts}
+      <div class="pop-foot"><button class="btn" data-act="anim"><svg><use href="#i-plus"/></svg>Animation at this cut</button></div>`;
+    $('code', node).textContent = `Into ${mainLabel(c)}`;
+    node.addEventListener('click', (e) => {
+      const act = e.target.closest('[data-act]')?.dataset.act;
+      if (act === 'close') return closeTlPop();
+      if (act === 'anim') return openAnimPop(c.index, anchor);
+      const k = e.target.closest('[data-kind]')?.dataset.kind;
+      if (k && k !== kind) setTransition(id, { kind: k }).then(() => reopenTxPop(id));
+    });
+    for (const input of $$('[data-tx]', node)) {
+      input.addEventListener('change', () => {
+        const key = input.dataset.tx;
+        let v = input.value;
+        if (key === 'duration') { v = Number(v); if (!isFinite(v) || v <= 0) return; v = r2(clamp(v, 0.1, 3)); }
+        setTransition(id, { [key]: v }).then(() => reopenTxPop(id));
+      });
+      if (input.tagName === 'INPUT') input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+    }
+    showTlPop(node, anchor);
+  }
+  // After a save the timeline is redrawn: reopen on the new chip so the popover follows it.
+  function reopenTxPop(id) {
+    const seam = $(`.seam[data-id="${CSS.escape(id)}"]`);
+    if (seam && state.tlPop?.kind === 'tx') openTxPop(id, seam);
+  }
+
+  // A new animation, described by the owner: a placeholder scene clip on the main track
+  // (it shows the prompt until Claude writes the scene) plus an "animation" feedback item
+  // that /apply-feedback picks up.
+  function sceneNameFor(prompt) {
+    const STOP = new Set(['a', 'an', 'the', 'of', 'our', 'my', 'with', 'and', 'to', 'for', 'in', 'on', 'that', 'this', 'it', 'is', 'into', 'from', 'how', 'some', 'show', 'shows', 'showing', 'animation', 'animate']);
+    const words = prompt.toLowerCase().normalize('NFKD').replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/).filter((w) => w && !STOP.has(w));
+    const base = words.slice(0, 3).join('-') || 'animation';
+    const taken = new Set([...state.project.scenes, ...state.project.edit.main.filter((c) => c.type === 'scene').map((c) => c.scene)]);
+    let name = base, n = 2;
+    while (taken.has(name)) name = `${base}-${n++}`;
+    return name;
+  }
+  function openAnimPop(index, anchor) {
+    pause();
+    closePopover();
+    const main = model().main;
+    state.tlPop = { kind: 'anim', index };
+    const node = document.createElement('div');
+    node.className = 'anim-pop';
+    const where = index == null || index >= main.length ? 'at the end' : `before ${mainLabel(main[index])}`;
+    node.innerHTML = `
+      <div class="pop-head"><code></code><button class="icon-btn" data-act="close" title="Cancel (Esc)"><svg><use href="#i-close"/></svg></button></div>
+      <textarea placeholder="What should it show? e.g. &quot;our app turning a messy inbox into three clear tasks&quot;"></textarea>
+      <div class="anim-row">
+        <label>Length<span class="unit-in"><input type="number" min="1" max="60" step="0.5" value="5"><i>s</i></span></label>
+        <p class="tip">Full frame, on the main track. It waits as a placeholder until you run <code>/apply-feedback video ${esc(vid())}</code>.</p>
+      </div>
+      <div class="pop-foot"><span class="tip">Ctrl+Enter</span><button class="btn btn-primary" data-act="save">Ask Claude for it</button></div>`;
+    $('code', node).textContent = `New animation ${where}`;
+    const ta = $('textarea', node);
+    ta.spellcheck = true;
+    const submit = () => {
+      const prompt = ta.value.trim();
+      const len = Number($('input', node).value);
+      if (!prompt) return ta.focus();
+      requestAnimation(index, prompt, isFinite(len) && len > 0 ? r2(clamp(len, 1, 60)) : 5);
+    };
+    node.addEventListener('click', (e) => {
+      const act = e.target.closest('[data-act]')?.dataset.act;
+      if (act === 'close') closeTlPop();
+      if (act === 'save') submit();
+    });
+    node.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); submit(); } });
+    showTlPop(node, anchor);
+    ta.focus();
+  }
+  async function requestAnimation(index, prompt, len) {
+    const id = newId('c');
+    const scene = sceneNameFor(prompt);
+    closeTlPop();
+    state.sel = { lane: 'main', id };
+    await saveEdit((e) => e.main.splice(index == null ? e.main.length : Math.min(index, e.main.length), 0, { id, type: 'scene', scene, duration: len, prompt }));
+    const c = resolvedOf('main', id);
+    if (!c) return;
+    try {
+      const item = await saveItem('POST', '', { type: 'animation', clip: id, comment: prompt, time: c.start, until: r2(c.start + c.duration), target: { selector: `#${id}`, el: null, tag: 'section', text: '', scene } });
+      state.activeItem = item.id;
+      afterFeedbackChange();
+      seek(c.start);
+      toast(`Asked for "${scene}". Copy the prompt for Claude when you're ready; the placeholder becomes the animation.`);
+    } catch (err) { toast(`Request not saved: ${err.message}`, true); }
   }
 
   function mainIndexAt(clientX) {
@@ -706,7 +909,7 @@
 
   let tlDrag = null;
   tlBody.addEventListener('pointerdown', (e) => {
-    if (e.button !== 0 || e.target.closest('.marker')) return;
+    if (e.button !== 0 || e.target.closest('.marker, .seam, .add-anim')) return;
     const clip = e.target.closest('.clip');
     if (clip && state.mode !== 'comment') return startClipDrag(e, clip);
     // Ruler or empty lane: scrub. In comment mode a drag selects a stretch of time.
@@ -815,8 +1018,10 @@
       showInsertMark(r.index);
       return;
     }
-    d.el.style.left = r.left + 'px';
-    d.el.style.width = Math.max(4, r.width) + 'px';
+    // Main clips are drawn from the middle of their transition overlaps.
+    const a = d.lane === 'main' ? (d.c.tin || 0) / 2 : 0, b = d.lane === 'main' ? (d.c.tout || 0) / 2 : 0;
+    d.el.style.left = r.left + a * state.pps + 'px';
+    d.el.style.width = Math.max(4, r.width - (a + b) * state.pps) + 'px';
     const shown = r.start ?? d.c.start;
     $('#coords').textContent = `${fmt(shown)} → ${fmt(shown + (r.duration ?? (r.width / state.pps)))}`;
   }
@@ -862,6 +1067,7 @@
       const it = itemIn(edit, lane, c.id);
       const second = structuredClone(it);
       second.id = id2;
+      delete second.transition;   // the new cut inside a clip is a straight cut
       const local = t - c.start;
       if (lane === 'main' && c.type === 'media' && c.kind !== 'image') { it.out = r2(c.in + local); second.in = r2(c.in + local); }
       else if (lane === 'main') { it.duration = r2(local); second.duration = r2(c.duration - local); }
@@ -934,7 +1140,8 @@
       html = `<h3><svg><use href="#i-scene"/></svg><span></span></h3>${span}
         <label>Animation<select data-k="scene">${(state.project.scenes.includes(c.scene) ? state.project.scenes : [c.scene, ...state.project.scenes]).map((s) => `<option${s === c.scene ? ' selected' : ''}>${esc(s)}</option>`).join('')}</select></label>
         ${num('Duration (s)', 'duration', raw.duration ?? 5, 0.1, 'min="0.5"')}
-        <p class="note">Claude writes animations in <code>videos/${esc(vid())}/scenes/</code>. To change how it moves, comment on it.</p>`;
+        ${raw.prompt != null ? `<label>What it should show<textarea data-k="prompt" rows="3">${esc(raw.prompt)}</textarea></label>` : ''}
+        <p class="note">${c.pending ? `Waiting for Claude: run <code>/apply-feedback video ${esc(vid())}</code> (Copy prompt, top right) and this placeholder becomes the animation.` : `Claude writes animations in <code>videos/${esc(vid())}/scenes/</code>. To change how it moves, comment on it.`}</p>`;
     } else if (lane === 'overlays') {
       const kinds = ['title', 'lower', 'label', 'arrow', 'highlight', 'image', 'anim'];
       html = `<h3><svg><use href="#i-text"/></svg><span></span></h3>${span}
@@ -957,6 +1164,12 @@
         <label>Volume<input type="range" data-k="volume" min="0" max="1" step="0.05" value="${raw.volume ?? 1}"></label>
         <p class="note">Audio stops at the end of the picture.</p>`;
     }
+    if (lane === 'main' && c.index > 0) {
+      const kind = c.transition?.kind || 'cut';
+      html += `<fieldset><legend>Transition in from ${esc(mainLabel(model().main[c.index - 1]))}</legend><div class="row">
+        <label>Kind<select data-k="tx.kind">${Object.entries(TX_NAMES).map(([k, n]) => `<option value="${k}"${k === kind ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
+        ${kind === 'cut' ? '' : num('Length (s)', 'tx.duration', c.transition.duration, 0.1, 'min="0.1" max="3"')}</div></fieldset>`;
+    }
     html += `<div class="acts"><button class="btn" data-act="split"><svg><use href="#i-split"/></svg>Split at playhead</button><button class="btn" data-act="remove"><svg><use href="#i-trash"/></svg>Remove</button></div>`;
     box.innerHTML = `<div class="insp">${html}</div>`;
     const title = lane === 'main' && c.type === 'media' ? c.src : c.type === 'deck' ? `Deck · ${c.deck}` : c.type === 'scene' ? `Animation · ${c.scene}` : lane === 'audio' ? c.src : 'Overlay';
@@ -972,6 +1185,12 @@
         if (input.type === 'number' && !isFinite(v)) return renderInspector();
         if (typeof v === 'string' && k !== 'text' && k !== 'sub') v = v.trim();
         const { lane: l, id } = state.sel;
+        if (k.startsWith('tx.')) return setTransition(id, { [k.slice(3)]: k === 'tx.duration' ? r2(clamp(v, 0.1, 3)) : v });
+        if (k === 'prompt') {
+          // Keep the open request in step with the clip.
+          const req = state.feedback.find((f) => f.type === 'animation' && f.clip === id && f.status === 'open');
+          if (req && v) saveItem('PATCH', req.id, { comment: v }).then(renderPanel).catch((er) => toast(er.message, true));
+        }
         saveEdit((edit) => {
           const it = itemIn(edit, l, id);
           if (k.startsWith('box.')) { it.box = { ...(it.box || resolvedOf(l, id).box) }; it.box[k.slice(4)] = Math.round(v); }
@@ -1397,7 +1616,7 @@
   }
 
   // ---------- feedback panel ----------
-  const KIND = { comment: 'Comment', adjust: 'Move & resize', layout: 'Sketch' };
+  const KIND = { comment: 'Comment', adjust: 'Move & resize', layout: 'Sketch', animation: 'New animation' };
   function renderPanel() {
     if (!state.project) return;
     const all = state.feedback;
@@ -1421,7 +1640,7 @@
       li.dataset.type = f.type;
       li.dataset.status = f.status;
       const when = f.time == null ? '' : f.until != null && f.type === 'comment' ? `<span class="fb-time range">${fmt(f.time)}–${fmt(f.until)}</span>` : `<span class="fb-time">at ${fmt(f.time)}</span>`;
-      const target = f.type === 'layout' ? `${f.blocks?.length || 0} block${f.blocks?.length === 1 ? '' : 's'}` : (f.slide ? `${f.slide} · ` : '') + (f.target?.el || (f.target?.selector === 'timeline' ? 'stretch' : f.target?.src ? 'footage' : f.target?.tag) || '');
+      const target = f.type === 'animation' ? `scenes/${f.target?.scene || ''}` : f.type === 'layout' ?`${f.blocks?.length || 0} block${f.blocks?.length === 1 ? '' : 's'}` : (f.slide ? `${f.slide} · ` : '') + (f.target?.el || (f.target?.selector === 'timeline' ? 'stretch' : f.target?.src ? 'footage' : f.target?.tag) || '');
       li.innerHTML = `
         <div class="fb-top"><span class="fb-num"></span><span class="fb-kind"></span><span class="fb-target"></span>${when}</div>
         <textarea rows="2"></textarea>
@@ -1437,7 +1656,7 @@
       if (f.resolution) $('.fb-resolution', li).append(f.resolution);
       const ta = $('textarea', li);
       ta.value = f.comment || '';
-      ta.placeholder = f.type === 'comment' ? 'Comment' : 'Optional: notes for this sketch';
+      ta.placeholder = f.type === 'comment' ? 'Comment' : f.type === 'animation' ? 'What the animation should show' : 'Optional: notes for this sketch';
       ta.disabled = f.status !== 'open';
       ta.addEventListener('change', () => saveItem('PATCH', f.id, { comment: ta.value.trim() }).catch((e) => toast(e.message, true)));
       li.addEventListener('click', (e) => {
@@ -1498,6 +1717,7 @@
     const typing = e.target.matches('input:not([type="range"]):not([type="checkbox"]), textarea, select');
     if (e.key === 'Escape') {
       if (typing) e.target.blur();
+      if (closeTlPop()) return;
       if (!$('#newForm').hidden) showNewForm(false);
       closePopover();
       state.selBlock = null;

@@ -96,6 +96,43 @@
     if (duration > 1) tl.to(el, { opacity: 0, duration: OVERLAY_OUT, ease: 'power1.in' }, start + duration - OVERLAY_OUT - 0.02);
   }
 
+  // Transitions between main-track clips (edit.json main[i].transition). `from` and `to`
+  // overlap for `d` seconds starting at `start`; `to` paints above `from`, `layer` (dip
+  // colour, route line) above both. Tweens on `from` don't render early (it may already
+  // carry its own entrance), so seeking either way lands on the exact frame.
+  var TX_EASE = 'power2.inOut';
+  var PUSH = { left: ['x', -1920], right: ['x', 1920], up: ['y', -1080], down: ['y', 1080] };
+  // Where the incoming clip is still hidden: the side the edge travels from.
+  var WIPE = { left: 'inset(0% 0% 0% 100%)', right: 'inset(0% 100% 0% 0%)', up: 'inset(100% 0% 0% 0%)', down: 'inset(0% 0% 100% 0%)' };
+  function transition(tl, from, to, layer, start, d, kind, dir) {
+    if (!to) return;
+    var late = { immediateRender: false };
+    if (kind === 'crossfade') {
+      tl.fromTo(to, { opacity: 0 }, { opacity: 1, duration: d, ease: 'none' }, start);
+    } else if (kind === 'dip') {
+      // Out to the colour, swap underneath, back in from it.
+      var dip = layer && layer.querySelector('.tx-dip');
+      tl.fromTo(to, { opacity: 0 }, { opacity: 1, duration: 0.001 }, start + d / 2);
+      if (dip) {
+        tl.fromTo(dip, { opacity: 0 }, { opacity: 1, duration: d / 2, ease: 'power1.in' }, start);
+        tl.fromTo(dip, { opacity: 1 }, Object.assign({ opacity: 0, duration: d / 2, ease: 'power1.out' }, late), start + d / 2);
+      }
+    } else if (kind === 'wipe') {
+      tl.fromTo(to, { clipPath: WIPE[dir] || WIPE.left }, { clipPath: 'inset(0% 0% 0% 0%)', duration: d, ease: TX_EASE }, start);
+    } else if (kind === 'push') {
+      var p = PUSH[dir] || PUSH.left, a = {}, b = {}, c = {}, e = {};
+      a[p[0]] = -p[1]; b[p[0]] = 0; c[p[0]] = 0; e[p[0]] = p[1];
+      tl.fromTo(to, a, Object.assign(b, { duration: d, ease: TX_EASE }), start);
+      if (from) tl.fromTo(from, c, Object.assign(e, { duration: d, ease: TX_EASE }, late), start);
+    } else if (kind === 'route') {
+      // The route line sweeps across and the next clip is revealed behind it.
+      var right = dir === 'right' || dir === 'down';
+      var line = layer && layer.querySelector('i');
+      tl.fromTo(to, { clipPath: right ? WIPE.right : WIPE.left }, { clipPath: 'inset(0% 0% 0% 0%)', duration: d, ease: TX_EASE }, start);
+      if (line) tl.fromTo(line, { x: right ? 0 : 1920 }, { x: right ? 1920 : 0, duration: d, ease: TX_EASE }, start);
+    }
+  }
+
   // Animation scenes Claude writes per video project (videos/<id>/scenes/<name>.js):
   //   PitchScenes.register('name', function (tl, root, start, duration) { tl.fromTo(...) });
   // A scene without a script falls back to the slide grammar, so plain markup still moves.
@@ -108,5 +145,5 @@
     },
   };
 
-  global.PitchMotion = { build: build, overlay: overlay, EXIT: EXIT };
+  global.PitchMotion = { build: build, overlay: overlay, transition: transition, EXIT: EXIT };
 })(typeof window !== 'undefined' ? window : globalThis);

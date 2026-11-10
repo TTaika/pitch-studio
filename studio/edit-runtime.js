@@ -15,12 +15,24 @@
     el._from = parseFloat(el.getAttribute('data-media-start')) || 0;
     if (el._media) {
       var vol = parseFloat(el.getAttribute('data-volume'));
-      el.volume = Math.max(0, Math.min(1, isNaN(vol) ? 1 : vol));
+      el._vol = Math.max(0, Math.min(1, isNaN(vol) ? 1 : vol));
+      // Edge fades (transitions crossfade the sound), as HyperFrames applies them.
+      el._fin = parseFloat(el.getAttribute('data-fade-in')) || 0;
+      el._fout = parseFloat(el.getAttribute('data-fade-out')) || 0;
+      el.volume = el._vol;
     }
   });
 
+  function gain(el) {
+    var g = el._vol;
+    if (el._fin) g *= Math.min(1, Math.max(0, (t - el._start) / el._fin));
+    if (el._fout) g *= Math.min(1, Math.max(0, (el._end - t) / el._fout));
+    return g;
+  }
+
   function syncMedia(el, on) {
     if (!on) { if (!el.paused) el.pause(); return; }
+    if (el._fin || el._fout) el.volume = gain(el);
     var target = el._from + (t - el._start);
     if (playing) {
       if (el.paused) {

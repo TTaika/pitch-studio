@@ -35,6 +35,8 @@ Open **Videos** in the top bar (http://127.0.0.1:4173/edit).
 
 1. Create a video, then **Import** your clips (or drop files anywhere on the window; phone `.mov` works, a 720p preview copy is made for smooth scrubbing; renders use the originals).
 2. Drag footage, deck slides and animations onto the **Main** lane; they play back to back. Drag edges to trim, drag clips to reorder, `S` splits at the playhead, `Delete` removes, `Ctrl+Z` undoes.
+   - **Transitions:** hover a cut on the Main lane and click it: crossfade, dip (to black, white or a theme colour), wipe, push or the orange route line, with a length. The clips overlap by that much and the sound crossfades.
+   - **+ Animation** (end of the Main lane, or on any cut): describe an animation and its length. A placeholder clip holds the spot until Claude makes it on the next `/apply-feedback`.
 3. Add **overlays** over the picture (title, lower third, label, arrow, highlight). Edit their words in the Clip panel, drag them into place in Adjust (`A`).
 4. Direct the AI like on slides: `C` and click anything at a moment ("cut this pause", "animate the product here"), drag along the ruler to comment on a stretch, `B` to sketch what should appear. Then **Copy prompt for Claude** (`/apply-feedback video <id>`): Claude recuts the edit, writes overlays and builds product animations as scenes.
 5. **Render MP4** → `exports/videos/<id>.mp4`.

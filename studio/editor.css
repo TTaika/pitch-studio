@@ -213,6 +213,69 @@ body[data-mode="comment"] .ruler { cursor: crosshair; }
 .clip .edge { position: absolute; top: 0; bottom: 0; width: 8px; cursor: ew-resize; z-index: 1; }
 .clip .edge.l { left: 0; } .clip .edge.r { right: 0; }
 .clip.sel .edge::after { content: ""; position: absolute; top: 30%; bottom: 30%; left: 3px; width: 2px; border-radius: 1px; background: var(--accent); }
+/* An animation the owner asked for that Claude hasn't written yet: drawn, not filled. */
+.clip.scene.pending { background: repeating-linear-gradient(135deg, #1e2124 0 7px, #25282c 7px 14px); box-shadow: inset 0 0 0 1px var(--line-2); }
+.clip.scene.pending.sel { box-shadow: inset 0 0 0 2px var(--accent); }
+.clip.scene.pending .lbl small { color: var(--text-3); }
+
+/* Cuts on the main track. Plain cut: a small bow-tie that shows on lane hover.
+   Transition: a light chip spanning the overlap, centred on the drawn cut. */
+.seam {
+  position: absolute; top: 50%; z-index: 2;
+  height: 22px; width: 22px; margin: -11px 0 0 -11px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  background: var(--raise); color: var(--text-2);
+  border: 1px solid var(--line-2); border-radius: 5px;
+  cursor: pointer; opacity: 0;
+  transition: opacity 0.15s var(--ease), background-color 0.15s var(--ease);
+}
+.seam svg { width: 12px; height: 12px; flex: none; }
+.lane.main:hover .seam, .seam:focus-visible, .seam.open { opacity: 1; }
+.seam:hover { background: var(--raise-2); color: var(--text); }
+.seam.tx { margin-left: 0; opacity: 1; background: var(--text); color: var(--ground); border-color: var(--text); overflow: hidden; }
+.seam.tx span { font: 600 11px var(--ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.seam.tx:hover { background: #fff; color: var(--ground); }
+.seam.open { outline: 2px solid var(--accent); outline-offset: 1px; }
+.seam:focus-visible, .add-anim:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+.add-anim {
+  position: absolute; top: 5px; bottom: 5px; z-index: 2;
+  display: inline-flex; align-items: center; gap: 6px; padding: 0 12px;
+  background: none; color: var(--text-2);
+  border: 1px dashed var(--line-2); border-radius: 4px;
+  font: 600 12px var(--ui); white-space: nowrap; cursor: pointer;
+  transition: color 0.15s var(--ease), border-color 0.15s var(--ease), background-color 0.15s var(--ease);
+}
+.add-anim svg { width: 14px; height: 14px; }
+.add-anim:hover, .add-anim.open { color: var(--text); border-color: var(--text-3); background: var(--raise); }
+.lane.main:has(.lane-empty) .lane-empty { left: 132px; }
+
+/* Popovers that belong to the timeline (transition, new animation). */
+.tl-pop { position: fixed; z-index: 20; width: 340px; }
+.tx-kinds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px; padding: 3px; background: var(--ground); border: 1px solid var(--line); border-radius: 7px; }
+.tx-kinds button { height: 30px; border: 0; border-radius: 4px; background: none; color: var(--text-2); font: 13px var(--ui); cursor: pointer; }
+.tx-kinds button:hover { color: var(--text); background: var(--raise); }
+.tx-kinds button[aria-checked="true"] { background: var(--raise-2); color: var(--text); font-weight: 600; box-shadow: inset 0 -2px 0 var(--accent); }
+.tx-help { margin: 10px 2px 0; color: var(--text-2); font-size: 13px; line-height: 1.45; text-wrap: pretty; }
+.tx-note { margin: 8px 2px 0; color: var(--text-3); font-size: 12px; }
+.tx-opts { display: grid; grid-template-columns: 96px 1fr; gap: 10px; margin-top: 12px; }
+.tl-pop label { display: grid; gap: 5px; font-size: 12px; color: var(--text-2); }
+.tl-pop select, .tl-pop input[type="number"] {
+  height: 32px; min-width: 0; width: 100%;
+  background: var(--ground); color: var(--text);
+  border: 1px solid var(--line); border-radius: 5px; padding: 0 8px; font: 14px var(--ui);
+}
+.tl-pop input[type="number"] { font: 13px var(--mono); padding-right: 22px; }
+.tl-pop select:focus, .tl-pop input:focus { outline: none; border-color: var(--accent); }
+.unit-in { position: relative; display: block; }
+.unit-in i { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font: 12px var(--mono); font-style: normal; color: var(--text-3); pointer-events: none; }
+.tl-pop .pop-foot { margin-top: 12px; }
+.tl-pop .pop-foot .btn svg { width: 14px; height: 14px; }
+.anim-pop textarea { min-height: 92px; }
+.anim-row { display: grid; grid-template-columns: 96px 1fr; gap: 12px; align-items: end; margin-top: 10px; }
+.anim-row .tip { margin: 0 0 2px; color: var(--text-3); font-size: 12px; line-height: 1.45; }
+.anim-row code { font: 11px var(--mono); color: var(--text-2); }
+
 .insert-mark { position: absolute; top: 2px; bottom: 2px; width: 3px; margin-left: -1.5px; background: var(--accent); border-radius: 2px; pointer-events: none; z-index: 4; }
 
 .playhead { position: absolute; top: 0; bottom: 0; width: 0; z-index: 5; pointer-events: none; }
